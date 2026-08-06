@@ -1,0 +1,10 @@
+[Plot] 启动绘图节点
+{"timestamp":"2026-03-16T03:21:28.406720Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+[Plot] 检测到 DISPLAY，在主线程运行显示窗口
+[Plot] Frame: 30 | 平均FPS: 8.8
+[Plot] Frame: 60 | 平均FPS: 9.3
+[Plot] Frame: 90 | 平均FPS: 9.6
+[Plot] Frame: 120 | 平均FPS: 9.7
+[Plot] Frame: 150 | 平均FPS: 9.7
+{"timestamp":"2026-03-16T03:21:46.970393Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cf4a9-f88f-756a-afa8-6036978fd223) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+[Plot] 总结: 170 帧, 平均FPS: 9.58

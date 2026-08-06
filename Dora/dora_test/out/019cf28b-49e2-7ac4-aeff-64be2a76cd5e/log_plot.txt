@@ -1,0 +1,4 @@
+[Plot] 启动绘图节点
+{"timestamp":"2026-03-15T17:29:02.542153Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+[Plot] 总结: 11 帧, 平均FPS: 3.12
+{"timestamp":"2026-03-15T17:29:06.180431Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cf28b-59ee-7c2b-af66-5ad6461a9959) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}

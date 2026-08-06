@@ -1,0 +1,16 @@
+[Plot] 启动绘图节点
+{"timestamp":"2026-03-14T11:43:36.712443Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+[Plot] 总结: 2 帧, 平均FPS: 3.22
+Traceback (most recent call last):
+  File "/app/Dora/dora_test/plot.py", line 98, in <module>
+    main()
+  File "/app/Dora/dora_test/plot.py", line 26, in main
+    bbox_data_cache = event["value"].to_numpy()
+  File "pyarrow/array.pxi", line 1787, in pyarrow.lib.Array.to_numpy
+  File "pyarrow/error.pxi", line 92, in pyarrow.lib.check_status
+pyarrow.lib.ArrowInvalid: Needed to copy 1 chunks with 0 nulls, but zero_copy_only was True
+{"timestamp":"2026-03-14T11:43:38.546707Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cec28-b766-7bce-afb1-3d9e27f15d9c) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-14T11:43:38.645892Z","level":"WARN","fields":{"message":"timeout while waiting for event stream thread"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-14T11:43:38.646978Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cec28-b7c8-7ad5-99ad-44c073c47383) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-14T11:43:38.747179Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cec28-b82c-71bc-8280-affdbef17f80) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-14T11:43:38.847371Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cec28-b891-753a-864f-59acc8680e35) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}

@@ -1,0 +1,27 @@
+[ObjectDetection] 启动YOLOv5检测节点
+[ObjectDetection] 加载YOLOv5模型: /opt/hobot/model/x5/basic/yolov5s_672x672_nv12.bin
+[BPU_PLAT]BPU Platform Version(1.3.6)! soc info(x5)
+[HBRT] set log level as 0. version = 3.15.55.0
+[DNN] Runtime version = 1.24.5_(3.15.55 HBRT)
+[A][DNN][packed_model.cpp:247][Model](2026-03-14,19:43:36.590.484) [HorizonRT] The model builder version = 1.23.5
+[W][DNN]bpu_model_info.cpp:491][Version](2026-03-14,19:43:36.702.69) Model: yolov5s_v2_672x672_bayese_nv12. Inconsistency between the hbrt library version 3.15.55.0 and the model build version 3.15.47.0 detected, in order to ensure correct model results, it is recommended to use compilation tools and the BPU SDK from the same OpenExplorer package.
+[ObjectDetection] ✅ 模型加载成功，输出数量: 3
+{"timestamp":"2026-03-14T11:43:36.713387Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+[ObjectDetection]  30帧 | FPS:   8.7 | 推理:  28.0ms | 检测: 0
+[ObjectDetection]  60帧 | FPS:   9.4 | 推理:  27.5ms | 检测: 0
+[ObjectDetection]  90帧 | FPS:   9.6 | 推理:  27.2ms | 检测: 0
+[ObjectDetection] 120帧 | FPS:   9.8 | 推理:  27.4ms | 检测: 0
+[ObjectDetection] 150帧 | FPS:   9.8 | 推理:  19.0ms | 检测: 0
+[ObjectDetection] 180帧 | FPS:   9.9 | 推理:  27.9ms | 检测: 0
+[ObjectDetection] 210帧 | FPS:   9.9 | 推理:  27.2ms | 检测: 0
+[ObjectDetection] 240帧 | FPS:   9.9 | 推理:  27.2ms | 检测: 0
+[ObjectDetection] 270帧 | FPS:  10.0 | 推理:  24.5ms | 检测: 0
+[ObjectDetection] 300帧 | FPS:  10.0 | 推理:  20.0ms | 检测: 0
+[ObjectDetection] 330帧 | FPS:  10.0 | 推理:  26.0ms | 检测: 0
+[ObjectDetection] 360帧 | FPS:  10.0 | 推理:  27.8ms | 检测: 0
+[ObjectDetection] 390帧 | FPS:  10.0 | 推理:  27.2ms | 检测: 0
+[ObjectDetection] 420帧 | FPS:  10.0 | 推理:  27.2ms | 检测: 0
+[ObjectDetection] 450帧 | FPS:  10.0 | 推理:  27.2ms | 检测: 0
+[ObjectDetection] 480帧 | FPS:  10.0 | 推理:  27.8ms | 检测: 0
+[ObjectDetection] 510帧 | FPS:  10.1 | 推理:  27.7ms | 检测: 0
+[ObjectDetection] 540帧 | FPS:  10.1 | 推理:  27.4ms | 检测: 0

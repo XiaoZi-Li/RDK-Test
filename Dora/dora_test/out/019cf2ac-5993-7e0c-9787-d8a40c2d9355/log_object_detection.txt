@@ -1,0 +1,24 @@
+[ObjectDetection] 启动YOLOv5检测节点
+[ObjectDetection] 加载YOLOv5模型: /opt/hobot/model/x5/basic/yolov5s_672x672_nv12.bin
+[BPU_PLAT]BPU Platform Version(1.3.6)! soc info(x5)
+[HBRT] set log level as 0. version = 3.15.55.0
+[DNN] Runtime version = 1.24.5_(3.15.55 HBRT)
+[A][DNN][packed_model.cpp:247][Model](2026-03-16,02:05:09.83.598) [HorizonRT] The model builder version = 1.23.5
+[W][DNN]bpu_model_info.cpp:491][Version](2026-03-16,02:05:09.190.959) Model: yolov5s_v2_672x672_bayese_nv12. Inconsistency between the hbrt library version 3.15.55.0 and the model build version 3.15.47.0 detected, in order to ensure correct model results, it is recommended to use compilation tools and the BPU SDK from the same OpenExplorer package.
+[ObjectDetection] ✅ 模型加载成功，输出数量: 3
+{"timestamp":"2026-03-15T18:05:09.201589Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+TypeError: Failed to parse arguments.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/Dora/dora_test/object_detection.py", line 257, in <module>
+    main()
+  File "/app/Dora/dora_test/object_detection.py", line 249, in main
+    pending_task = model.forward(current_nv12, invalid_output=True)
+SystemError: <built-in method forward of dnnpy.Model object at 0xffff8f1f8c60> returned a result with an exception set
+{"timestamp":"2026-03-15T18:05:10.720443Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cf2ac-6236-75a8-ba89-e19ec794e98a) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-15T18:05:10.819553Z","level":"WARN","fields":{"message":"timeout while waiting for event stream thread"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-15T18:05:10.820785Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cf2ac-6283-78fb-9732-df95589dec75) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-15T18:05:10.920954Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cf2ac-62e5-7869-9169-76f317398c3c) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-15T18:05:11.021152Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cf2ac-631a-7d6a-9c9e-dc6cf9cfe26d) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}

@@ -1,0 +1,3 @@
+[Plot] 启动绘图节点
+{"timestamp":"2026-03-18T04:30:50.818542Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+[Plot] 检测到 DISPLAY，在主线程运行显示窗口

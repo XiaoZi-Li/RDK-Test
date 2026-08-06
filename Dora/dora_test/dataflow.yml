@@ -1,0 +1,20 @@
+nodes:
+  - id: camera
+    path: python3
+    args: nodes/camera.py
+    outputs:
+      - image
+
+  - id: detector
+    path: python3
+    args: nodes/detector.py
+    inputs:
+      image: camera/image
+    outputs:
+      - result
+
+  - id: display
+    path: python3
+    args: nodes/display.py
+    inputs:
+      result: detector/result

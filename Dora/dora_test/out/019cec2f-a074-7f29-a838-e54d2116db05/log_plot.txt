@@ -1,0 +1,18 @@
+[Plot] 启动绘图节点
+{"timestamp":"2026-03-14T11:51:12.037122Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+[Plot] Frame: 100 | 平均FPS: 9.9
+[Plot] Frame: 200 | 平均FPS: 10.0
+[Plot] Frame: 300 | 平均FPS: 10.0
+[Plot] Frame: 400 | 平均FPS: 10.1
+[Plot] Frame: 500 | 平均FPS: 10.1
+[Plot] Frame: 600 | 平均FPS: 10.1
+[Plot] Frame: 700 | 平均FPS: 10.1
+[Plot] Frame: 800 | 平均FPS: 10.1
+[Plot] Frame: 900 | 平均FPS: 10.1
+[Plot] 总结: 976 帧, 平均FPS: 10.05
+{"timestamp":"2026-03-14T11:52:49.995930Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cec31-207c-7cb4-bd4a-03421b2cdb52) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-14T11:52:50.096110Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cec31-20de-7447-afb8-9a3ebf44e8cc) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-14T11:52:50.195399Z","level":"WARN","fields":{"message":"timeout while waiting for event stream thread"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-14T11:52:50.196282Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cec31-2146-775e-9d05-d146b09f54de) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-14T11:52:50.296457Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cec31-21aa-7e31-ade0-da4b86fee976) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-14T11:52:50.396652Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cec31-2212-76ee-83fb-96c98d53c52a) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}

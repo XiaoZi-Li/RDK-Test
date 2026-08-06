@@ -1,0 +1,50 @@
+[ObjectDetection] 启动YOLOv5检测节点
+[ObjectDetection] 加载YOLOv5模型: /opt/hobot/model/x5/basic/yolov5s_672x672_nv12.bin
+[BPU_PLAT]BPU Platform Version(1.3.6)! soc info(x5)
+[HBRT] set log level as 0. version = 3.15.55.0
+[DNN] Runtime version = 1.24.5_(3.15.55 HBRT)
+[A][DNN][packed_model.cpp:247][Model](2026-03-16,01:33:38.921.971) [HorizonRT] The model builder version = 1.23.5
+[W][DNN]bpu_model_info.cpp:491][Version](2026-03-16,01:33:39.53.603) Model: yolov5s_v2_672x672_bayese_nv12. Inconsistency between the hbrt library version 3.15.55.0 and the model build version 3.15.47.0 detected, in order to ensure correct model results, it is recommended to use compilation tools and the BPU SDK from the same OpenExplorer package.
+[ObjectDetection] ✅ 模型加载成功，输出数量: 3
+{"timestamp":"2026-03-15T17:33:39.585158Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+[ObjectDetection]  30帧 | FPS:  13.4 | 推理:  19.6ms | 检测: 0
+[ObjectDetection]  60帧 | FPS:  12.9 | 推理:  19.1ms | 检测: 1
+[ObjectDetection]  90帧 | FPS:  11.8 | 推理:  19.1ms | 检测: 1
+[ObjectDetection] 120帧 | FPS:  11.4 | 推理:  18.9ms | 检测: 2
+[ObjectDetection] 150帧 | FPS:  11.1 | 推理:  19.6ms | 检测: 0
+[ObjectDetection] 180帧 | FPS:  10.9 | 推理:  19.4ms | 检测: 2
+[ObjectDetection] 210帧 | FPS:  10.8 | 推理:  20.0ms | 检测: 0
+[ObjectDetection] 240帧 | FPS:  11.0 | 推理:  19.3ms | 检测: 0
+[ObjectDetection] 270帧 | FPS:  11.4 | 推理:  19.1ms | 检测: 0
+[ObjectDetection] 300帧 | FPS:  11.7 | 推理:  19.0ms | 检测: 0
+[ObjectDetection] 330帧 | FPS:  11.9 | 推理:  19.3ms | 检测: 0
+[ObjectDetection] 360帧 | FPS:  12.1 | 推理:  19.9ms | 检测: 0
+[ObjectDetection] 390帧 | FPS:  12.3 | 推理:  19.1ms | 检测: 0
+[ObjectDetection] 420帧 | FPS:  12.5 | 推理:  19.4ms | 检测: 0
+[ObjectDetection] 450帧 | FPS:  12.6 | 推理:  19.2ms | 检测: 0
+[ObjectDetection] 480帧 | FPS:  12.8 | 推理:  19.6ms | 检测: 0
+[ObjectDetection] 510帧 | FPS:  12.9 | 推理:  19.0ms | 检测: 0
+[ObjectDetection] 540帧 | FPS:  13.0 | 推理:  19.1ms | 检测: 0
+[ObjectDetection] 570帧 | FPS:  13.1 | 推理:  19.0ms | 检测: 0
+[ObjectDetection] 600帧 | FPS:  13.2 | 推理:  18.9ms | 检测: 0
+[ObjectDetection] 630帧 | FPS:  13.3 | 推理:  19.1ms | 检测: 0
+[ObjectDetection] 660帧 | FPS:  13.3 | 推理:  19.2ms | 检测: 0
+[ObjectDetection] 690帧 | FPS:  13.4 | 推理:  19.1ms | 检测: 0
+[ObjectDetection] 720帧 | FPS:  13.5 | 推理:  19.2ms | 检测: 0
+[ObjectDetection] 750帧 | FPS:  13.6 | 推理:  19.1ms | 检测: 0
+[ObjectDetection] 780帧 | FPS:  13.6 | 推理:  19.1ms | 检测: 0
+[ObjectDetection] 810帧 | FPS:  13.7 | 推理:  19.2ms | 检测: 0
+[ObjectDetection] 840帧 | FPS:  13.7 | 推理:  19.2ms | 检测: 0
+[ObjectDetection] 870帧 | FPS:  13.8 | 推理:  19.4ms | 检测: 0
+[ObjectDetection] 900帧 | FPS:  13.8 | 推理:  19.8ms | 检测: 0
+[ObjectDetection] 930帧 | FPS:  13.9 | 推理:  19.0ms | 检测: 0
+[ObjectDetection] 960帧 | FPS:  13.9 | 推理:  19.5ms | 检测: 0
+[ObjectDetection] 990帧 | FPS:  13.9 | 推理:  19.3ms | 检测: 0
+[ObjectDetection] 1020帧 | FPS:  14.0 | 推理:  19.0ms | 检测: 0
+[ObjectDetection] 1050帧 | FPS:  14.0 | 推理:  19.4ms | 检测: 0
+[ObjectDetection] 1080帧 | FPS:  14.0 | 推理:  18.9ms | 检测: 0
+[ObjectDetection] 1110帧 | FPS:  14.1 | 推理:  19.1ms | 检测: 0
+[ObjectDetection] 1140帧 | FPS:  14.1 | 推理:  19.4ms | 检测: 0
+[ObjectDetection] 1170帧 | FPS:  14.1 | 推理:  19.2ms | 检测: 0
+{"timestamp":"2026-03-15T17:35:05.131410Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cf290-d5b5-754b-9109-c643e4c6ad6e) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+{"timestamp":"2026-03-15T17:35:07.135083Z","level":"WARN","fields":{"message":"timeout while waiting for drop tokens; closing 1 shared memory regions that might not yet been mapped."},"target":"dora_node_api::node"}

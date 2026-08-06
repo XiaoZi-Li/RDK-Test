@@ -1,0 +1,3 @@
+[Plot] 启动绘图节点
+{"timestamp":"2026-03-15T17:02:28.986269Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cf272-fc3e-7cb1-afa2-87e1ac1d9d33) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+[Plot] 总结: 97 帧, 平均FPS: 5.05

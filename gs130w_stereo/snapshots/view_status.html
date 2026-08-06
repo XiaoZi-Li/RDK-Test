@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>GS130W 双目深度避障监控</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0d0f14; color: #e0e0e0; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+  header { padding: 12px 18px; background: #161a22; border-bottom: 1px solid #2a2f3a; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  header .meta { color: #6c7180; font-size: 12px; }
+  header .pill { background: #1f2937; color: #10b981; padding: 2px 10px; border-radius: 999px; font-size: 11px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px; }
+  .cell { position: relative; background: #000; border-radius: 4px; overflow: hidden; aspect-ratio: 16/10; }
+  .cell.wide { grid-column: span 2; aspect-ratio: 1280/352; }
+  .cell img { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+  .cell.flip img { transform: rotate(180deg); }
+  .cell .label { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,.65); color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 500; z-index: 2; }
+  .cell .badge { position: absolute; top: 8px; right: 8px; background: rgba(239,68,68,.85); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; z-index: 2; }
+
+  /* 状态浮层 */
+  .status-panel {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    background: rgba(13, 15, 20, 0.88);
+    border: 1px solid #2a2f3a;
+    border-radius: 6px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    z-index: 3;
+    backdrop-filter: blur(2px);
+  }
+  .status-main { display: flex; align-items: center; gap: 12px; }
+  .status-title { font-size: 13px; color: #9ca3af; }
+  .status-verdict {
+    font-size: 18px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 6px;
+    background: #1f2937;
+    white-space: nowrap;
+  }
+  .status-verdict.safe { color: #10b981; background: rgba(16, 185, 129, 0.15); }
+  .status-verdict.caution { color: #f59e0b; background: rgba(245, 158, 11, 0.15); }
+  .status-verdict.danger { color: #ef4444; background: rgba(239, 68, 68, 0.15); }
+  .status-verdict.unknown { color: #6b7280; background: rgba(107, 114, 128, 0.15); }
+  .status-bars { display: flex; gap: 10px; flex: 1; justify-content: flex-end; }
+  .bar-group { text-align: center; min-width: 60px; }
+  .bar-label { font-size: 10px; color: #6c7180; margin-bottom: 3px; }
+  .bar-track { width: 60px; height: 6px; background: #2a2f3a; border-radius: 3px; overflow: hidden; margin: 0 auto; }
+  .bar-fill { height: 100%; width: 0%; border-radius: 3px; transition: width 0.15s ease, background 0.15s ease; }
+  .bar-value { font-size: 11px; margin-top: 3px; color: #d1d5db; }
+  .status-meta { font-size: 10px; color: #4b5563; }
+
+  footer { padding: 10px 18px; color: #6c7180; font-size: 11px; text-align: center; border-top: 1px solid #2a2f3a; }
+  code { background: #1f2937; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+  a { color: #60a5fa; text-decoration: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GS130W 双目深度避障监控</h1>
+  <span class="pill">RDK X5 · TROS 2.5.2 · BPU 立体匹配</span>
+  <span class="meta">3 路 MJPEG + 障碍物方向实时显示</span>
+</header>
+
+<div class="grid">
+
+  <div class="cell flip">
+    <span class="label">左眼 · 1280×1088 · <code>:8071</code></span>
+    <span class="badge">● LIVE</span>
+    <img id="img-left" alt="left eye">
+  </div>
+
+  <div class="cell flip">
+    <span class="label">右眼 · 1280×1088 · <code>:8072</code></span>
+    <span class="badge">● LIVE</span>
+    <img id="img-right" alt="right eye">
+  </div>
+
+  <div class="cell wide flip">
+    <span class="label">双目深度图 · <code>:8073</code> · BPU stereonet</span>
+    <span class="badge">● LIVE</span>
+    <img id="img-depth" alt="depth visual">
+
+    <div class="status-panel">
+      <div class="status-main">
+        <span class="status-title">障碍物判断</span>
+        <span id="verdict" class="status-verdict unknown">等待数据...</span>
+      </div>
+      <div class="status-bars">
+        <div class="bar-group">
+          <div class="bar-label">左</div>
+          <div class="bar-track"><div id="bar-left" class="bar-fill"></div></div>
+          <div id="val-left" class="bar-value">-</div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-label">中</div>
+          <div class="bar-track"><div id="bar-center" class="bar-fill"></div></div>
+          <div id="val-center" class="bar-value">-</div>
+        </div>
+        <div class="bar-group">
+          <div class="bar-label">右</div>
+          <div class="bar-track"><div id="bar-right" class="bar-fill"></div></div>
+          <div id="val-right" class="bar-value">-</div>
+        </div>
+      </div>
+      <div class="status-meta" id="status-meta">status: -</div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  本页：<code id="url-this">-</code>　|
+  单独访问：<a id="link-left" href="#">8071 左眼</a> · <a id="link-right" href="#">8072 右眼</a> · <a id="link-depth" href="#">8073 深度图</a>
+  <br>
+  数值越大表示越近（视差值）。避障状态接口：<code id="url-status">-</code>
+</footer>
+
+<script>
+  // 支持两种方式：
+  // 1. 页面由板子 http.server 下发：自动用 window.location.hostname
+  // 2. 页面在电脑本地打开：URL 里加 ?ip=192.168.128.10
+  const params = new URLSearchParams(window.location.search);
+  const host = params.get('ip') || window.location.hostname || '192.168.128.10';
+  const baseUrl = `http://${host}`;
+
+  // 图像源
+  document.getElementById('img-left').src = `${baseUrl}:8071`;
+  document.getElementById('img-right').src = `${baseUrl}:8072`;
+  document.getElementById('img-depth').src = `${baseUrl}:8073`;
+
+  // footer 链接
+  document.getElementById('url-this').textContent = `${baseUrl}:8090/view_status.html`;
+  document.getElementById('link-left').href = `${baseUrl}:8071`;
+  document.getElementById('link-right').href = `${baseUrl}:8072`;
+  document.getElementById('link-depth').href = `${baseUrl}:8073`;
+  document.getElementById('url-status').textContent = `${baseUrl}:8074/status`;
+
+  const verdictEl = document.getElementById('verdict');
+  const metaEl = document.getElementById('status-meta');
+
+  function fmt(v) {
+    return v === null || v === undefined || isNaN(v) ? '-' : Number(v).toFixed(1);
+  }
+
+  function scaleBar(value, danger, clear) {
+    // 0 ~ clear ~ danger
+    if (!value || !danger) return { pct: 0, cls: 'safe' };
+    const pct = Math.min(100, Math.max(0, (value / danger) * 100));
+    let cls = 'safe';
+    if (value > danger) cls = 'danger';
+    else if (value > clear) cls = 'caution';
+    return { pct, cls };
+  }
+
+  async function updateStatus() {
+    try {
+      const res = await fetch(`${baseUrl}:8074/status`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const left = data.left ?? 0;
+      const center = data.center ?? 0;
+      const right = data.right ?? 0;
+      const danger = data.danger ?? 30;
+      const clear = data.clear ?? 15;
+
+      document.getElementById('val-left').textContent = fmt(left);
+      document.getElementById('val-center').textContent = fmt(center);
+      document.getElementById('val-right').textContent = fmt(right);
+
+      const l = scaleBar(left, danger, clear);
+      const c = scaleBar(center, danger, clear);
+      const r = scaleBar(right, danger, clear);
+
+      function setBar(id, info) {
+        const el = document.getElementById(id);
+        el.style.width = `${info.pct}%`;
+        el.style.background = info.cls === 'danger' ? '#ef4444' : info.cls === 'caution' ? '#f59e0b' : '#10b981';
+      }
+      setBar('bar-left', l);
+      setBar('bar-center', c);
+      setBar('bar-right', r);
+
+      // 判断障碍物方向
+      let text = '无障碍';
+      let cls = 'safe';
+      if (data._stale || left === null) {
+        text = '等待数据...';
+        cls = 'unknown';
+      } else if (center > danger) {
+        if (left < right - 2) {
+          text = '障碍在前，左转';
+        } else if (right < left - 2) {
+          text = '障碍在前，右转';
+        } else {
+          text = '障碍在前，后退';
+        }
+        cls = 'danger';
+      } else if (center > clear) {
+        text = '接近障碍';
+        cls = 'caution';
+      } else {
+        text = '近距离无障碍';
+        cls = 'safe';
+      }
+
+      verdictEl.textContent = text;
+      verdictEl.className = `status-verdict ${cls}`;
+
+      const age = data._age_sec !== undefined ? `${data._age_sec}s` : '-';
+      const motion = data.enable_motion === false ? '运动:已禁用' : '运动:已启用';
+      metaEl.textContent = `${motion} | source: ${data.source || '-'} | cmd: ${data.last_cmd || '-'} | age: ${age}`;
+    } catch (err) {
+      verdictEl.textContent = '状态接口异常';
+      verdictEl.className = 'status-verdict danger';
+      metaEl.textContent = String(err.message || err);
+    }
+  }
+
+  // 首次立即刷新，之后每 200ms 一次
+  updateStatus();
+  setInterval(updateStatus, 200);
+</script>
+
+</body>
+</html>

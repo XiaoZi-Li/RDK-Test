@@ -1,0 +1,9 @@
+[Webcam] 启动摄像头节点
+[Webcam] 摄像头已启动: /dev/video1
+[Webcam] 摄像头已释放
+Traceback (most recent call last):
+  File "/app/Dora/dora_test/webcam.py", line 52, in <module>
+    for output in main():
+  File "/app/Dora/dora_test/webcam.py", line 24, in main
+    for event in dora.Event():
+AttributeError: module 'dora' has no attribute 'Event'

@@ -1,0 +1,26 @@
+[Webcam] 启动摄像头节点
+[Webcam] 摄像头已启动: /dev/video1
+{"timestamp":"2026-03-14T11:51:12.037260Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+[Webcam] 已发送 50 帧 | FPS: 9.6
+[Webcam] 已发送 100 帧 | FPS: 9.9
+[Webcam] 已发送 150 帧 | FPS: 9.9
+[Webcam] 已发送 200 帧 | FPS: 10.0
+[Webcam] 已发送 250 帧 | FPS: 10.0
+[Webcam] 已发送 300 帧 | FPS: 10.0
+[Webcam] 已发送 350 帧 | FPS: 10.0
+[Webcam] 已发送 400 帧 | FPS: 10.1
+[Webcam] 已发送 450 帧 | FPS: 10.1
+[Webcam] 已发送 500 帧 | FPS: 10.1
+[Webcam] 已发送 550 帧 | FPS: 10.1
+[Webcam] 已发送 600 帧 | FPS: 10.1
+[Webcam] 已发送 650 帧 | FPS: 10.1
+[Webcam] 已发送 700 帧 | FPS: 10.1
+[Webcam] 已发送 750 帧 | FPS: 10.1
+[Webcam] 已发送 800 帧 | FPS: 10.1
+[Webcam] 已发送 850 帧 | FPS: 10.1
+[Webcam] 已发送 900 帧 | FPS: 10.1
+[Webcam] 已发送 950 帧 | FPS: 10.1
+[Webcam] 已发送 1000 帧 | FPS: 10.1
+[Webcam] 已发送 1050 帧 | FPS: 10.1
+[Webcam] 已发送 1100 帧 | FPS: 10.1
+[Webcam] 已发送 1150 帧 | FPS: 10.1

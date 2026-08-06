@@ -1,0 +1,3 @@
+[Plot] 启动绘图节点
+[Plot] Frame: 100 | 平均FPS: 9.8
+[Plot] Frame: 200 | 平均FPS: 10.0

@@ -1,0 +1,10 @@
+[Webcam] 启动摄像头节点
+[Webcam] 摄像头已启动: /dev/video1
+{"timestamp":"2026-03-14T11:42:11.228464Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+[Webcam] 摄像头已释放
+Traceback (most recent call last):
+  File "/app/Dora/dora_test/webcam.py", line 54, in <module>
+    main()
+  File "/app/Dora/dora_test/webcam.py", line 34, in main
+    dora.Array(frame.flatten())
+AttributeError: module 'dora' has no attribute 'Array'

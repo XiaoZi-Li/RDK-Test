@@ -1,0 +1,6 @@
+[Webcam] 启动摄像头节点
+[Webcam] 摄像头已启动: /dev/video1 @ 640.0x480.0
+[Webcam] 已发送 50 帧 | FPS: 9.5
+[Webcam] 已发送 100 帧 | FPS: 9.7
+[Webcam] 已发送 150 帧 | FPS: 9.9
+[Webcam] 已发送 200 帧 | FPS: 10.0

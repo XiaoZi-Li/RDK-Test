@@ -1,0 +1,18 @@
+[Webcam] 启动摄像头节点
+[Webcam] 摄像头已启动: /dev/video1 @ 640.0x480.0
+{"timestamp":"2026-03-15T17:29:02.541407Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+[Webcam] 已发送 50 帧 | FPS: 14.1
+[Webcam] 已发送 100 帧 | FPS: 14.7
+[Webcam] 已发送 150 帧 | FPS: 14.8
+[Webcam] 已发送 200 帧 | FPS: 14.9
+[Webcam] 已发送 250 帧 | FPS: 13.6
+[Webcam] 已发送 300 帧 | FPS: 12.9
+[Webcam] 已发送 350 帧 | FPS: 12.4
+[Webcam] 已发送 400 帧 | FPS: 12.1
+[Webcam] 已发送 450 帧 | FPS: 11.8
+[Webcam] 已发送 500 帧 | FPS: 11.6
+[Webcam] 已发送 550 帧 | FPS: 11.5
+[Webcam] 已发送 600 帧 | FPS: 11.3
+[Webcam] 已发送 650 帧 | FPS: 11.2
+[Webcam] 摄像头已释放
+{"timestamp":"2026-03-15T17:30:05.729099Z","level":"WARN","fields":{"message":"timeout while waiting for drop tokens; closing 5 shared memory regions that might not yet been mapped."},"target":"dora_node_api::node"}

@@ -1,0 +1,8 @@
+[Webcam] 启动摄像头节点
+[Webcam] 摄像头已启动: /dev/video1 @ 640.0x480.0
+[Webcam] 摄像头已启动: /dev/video1
+{"timestamp":"2026-03-14T11:55:33.851873Z","level":"INFO","fields":{"message":"","name":"MeterProvider.GlobalSet","message":"Global meter provider is set. Meters can now be created using global::meter() or global::meter_with_scope()."},"target":"opentelemetry"}
+[Webcam] 已发送 50 帧 | FPS: 9.4
+[Webcam] 已发送 100 帧 | FPS: 9.8
+[Webcam] 已发送 150 帧 | FPS: 9.9
+[Webcam] 已发送 200 帧 | FPS: 9.9

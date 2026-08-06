@@ -1,0 +1,8 @@
+[Plot] 启动绘图节点
+[Plot] 总结: 0 帧, 平均FPS: 0.00
+Traceback (most recent call last):
+  File "/app/Dora/dora_test/plot.py", line 95, in <module>
+    main()
+  File "/app/Dora/dora_test/plot.py", line 20, in main
+    for event in dora.Event():
+AttributeError: module 'dora' has no attribute 'Event'

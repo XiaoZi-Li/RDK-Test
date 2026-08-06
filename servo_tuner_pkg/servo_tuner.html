@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PuppyPi · 运动调节工作台</title>
+  <style>
+    :root {
+      --bg: #05070a;
+      --panel: rgba(12, 18, 28, 0.85);
+      --panel-border: rgba(0, 255, 255, 0.16);
+      --cyan: #00f0ff;
+      --cyan-dim: rgba(0, 240, 255, 0.12);
+      --green: #00ff9d;
+      --green-dim: rgba(0, 255, 157, 0.12);
+      --orange: #ffaa00;
+      --red: #ff3860;
+      --text: #e0f7ff;
+      --text-dim: #7a8a9a;
+      --font: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+      --mono: 'JetBrains Mono', 'Consolas', monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; min-height: 100vh;
+      background:
+        radial-gradient(circle at 15% 20%, rgba(0, 240, 255, 0.05) 0%, transparent 35%),
+        radial-gradient(circle at 85% 80%, rgba(0, 255, 157, 0.04) 0%, transparent 35%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 240, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.025) 1px, transparent 1px);
+      background-size: 36px 36px;
+      pointer-events: none; z-index: 0;
+    }
+
+    .app { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px;
+      background: linear-gradient(90deg, rgba(0,0,0,0.7), rgba(0,240,255,0.05));
+      border-bottom: 1px solid var(--panel-border);
+      backdrop-filter: blur(10px);
+      flex-wrap: wrap; gap: 14px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .logo {
+      width: 42px; height: 42px;
+      border: 2px solid var(--cyan); border-radius: 10px;
+      display: grid; place-items: center;
+      box-shadow: 0 0 16px var(--cyan-dim), inset 0 0 12px var(--cyan-dim);
+      font-weight: 900; font-size: 20px; color: var(--cyan);
+    }
+    .brand h1 { margin: 0; font-size: 20px; letter-spacing: 1px; }
+    .brand p { margin: 2px 0 0; font-size: 11px; color: var(--text-dim); }
+
+    .status-bar {
+      display: flex; align-items: center; gap: 16px;
+      font-family: var(--mono); font-size: 12px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 5px 12px; border-radius: 999px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); box-shadow: 0 0 6px currentColor; transition: .3s; }
+    .dot.on { background: var(--green); box-shadow: 0 0 10px var(--green); }
+    .dot.off { background: var(--red); box-shadow: 0 0 10px var(--red); }
+
+    .ip-input { display: flex; align-items: center; gap: 8px; }
+    .ip-input input {
+      background: rgba(0,0,0,0.35); border: 1px solid rgba(0,240,255,0.25);
+      color: var(--cyan); padding: 6px 10px; border-radius: 6px;
+      font-family: var(--mono); font-size: 13px; width: 130px; outline: none;
+    }
+    .ip-input input:focus { border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan-dim); }
+    .ip-input button, .btn {
+      background: transparent; color: var(--cyan);
+      border: 1px solid var(--cyan); border-radius: 6px;
+      padding: 6px 12px; cursor: pointer; font-size: 12px;
+      transition: .2s; user-select: none;
+    }
+    .ip-input button:hover, .btn:hover { background: var(--cyan-dim); }
+    .btn:active { background: rgba(0,240,255,0.25); }
+    .btn.small { padding: 4px 10px; font-size: 11px; }
+    .btn.green { border-color: var(--green); color: var(--green); }
+    .btn.green:hover { background: var(--green-dim); }
+    .btn.red { border-color: var(--red); color: #ff7a8d; }
+    .btn.red:hover { background: rgba(255,56,96,0.15); }
+    .btn.orange { border-color: var(--orange); color: var(--orange); }
+    .btn.orange:hover { background: rgba(255,170,0,0.12); }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 18px;
+      padding: 18px 24px;
+    }
+
+    @media (max-width: 1100px) {
+      main { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 16px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+      display: flex; flex-direction: column; gap: 14px;
+    }
+
+    .panel-title {
+      font-size: 13px; color: var(--cyan); letter-spacing: .5px;
+      text-transform: uppercase; margin: 0;
+      border-left: 3px solid var(--cyan); padding-left: 10px;
+    }
+
+    .section-title {
+      font-size: 11px; color: var(--text-dim); letter-spacing: .5px;
+      margin-bottom: 8px;
+    }
+
+    .servo-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 700px) {
+      .servo-grid { grid-template-columns: 1fr; }
+    }
+
+    .leg-card {
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .leg-title {
+      font-size: 12px; color: var(--green); margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .servo-row {
+      display: grid;
+      grid-template-columns: 26px 90px 1fr 70px;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .servo-row:last-child { border-bottom: none; }
+
+    .servo-row label {
+      font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+    }
+
+    .servo-row input[type="checkbox"] {
+      width: 16px; height: 16px; accent-color: var(--cyan); cursor: pointer;
+    }
+
+    .servo-row input[type="range"] {
+      width: 100%;
+      accent-color: var(--cyan);
+    }
+
+    .servo-row input[type="number"] {
+      background: rgba(0,0,0,0.35); border: 1px solid rgba(0,240,255,0.2);
+      color: var(--cyan); padding: 4px 6px; border-radius: 4px;
+      font-family: var(--mono); font-size: 12px; width: 100%;
+      outline: none;
+    }
+
+    .global-controls {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      padding: 12px;
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+    }
+
+    .control-group {
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .control-group label { font-size: 12px; color: var(--text-dim); }
+
+    .control-group input[type="number"] {
+      background: rgba(0,0,0,0.35); border: 1px solid rgba(0,240,255,0.2);
+      color: var(--cyan); padding: 5px 8px; border-radius: 4px;
+      font-family: var(--mono); font-size: 12px; width: 80px;
+    }
+
+    .toggle {
+      display: inline-flex; align-items: center; gap: 8px;
+      cursor: pointer; font-size: 12px; color: var(--text-dim);
+    }
+    .toggle input { display: none; }
+    .toggle-switch {
+      width: 38px; height: 20px; border-radius: 999px;
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+      position: relative; transition: .2s;
+    }
+    .toggle-switch::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 14px; height: 14px; border-radius: 50%; background: var(--text-dim);
+      transition: .2s;
+    }
+    .toggle input:checked + .toggle-switch { background: var(--cyan-dim); border-color: var(--cyan); }
+    .toggle input:checked + .toggle-switch::after { left: 20px; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+
+    .presets {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+
+    .sequencer {
+      display: flex; flex-direction: column; gap: 10px;
+      max-height: 360px;
+    }
+
+    .frame-list {
+      flex: 1; overflow-y: auto;
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 8px;
+      font-family: var(--mono); font-size: 11px;
+    }
+
+    .frame-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px; margin-bottom: 6px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 6px;
+      border-left: 3px solid var(--cyan);
+    }
+
+    .frame-item.active { border-left-color: var(--green); background: var(--green-dim); }
+
+    .frame-item input[type="number"] {
+      background: rgba(0,0,0,0.35); border: 1px solid rgba(0,240,255,0.2);
+      color: var(--cyan); padding: 3px 5px; border-radius: 4px;
+      font-family: var(--mono); font-size: 11px; width: 60px;
+    }
+
+    .frame-values {
+      flex: 1; display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px;
+      font-size: 10px; color: var(--text-dim);
+    }
+
+    .frame-actions { display: flex; gap: 4px; }
+    .frame-actions button {
+      background: transparent; border: 1px solid rgba(255,255,255,0.12);
+      color: var(--text-dim); border-radius: 4px; cursor: pointer;
+      font-size: 10px; padding: 2px 6px;
+    }
+    .frame-actions button:hover { border-color: var(--cyan); color: var(--cyan); }
+
+    .seq-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .console {
+      height: 160px;
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 10px;
+      font-family: var(--mono); font-size: 11px;
+      overflow-y: auto;
+      color: var(--text-dim);
+    }
+
+    .console .log-info { color: var(--cyan); }
+    .console .log-ok { color: var(--green); }
+    .console .log-warn { color: var(--orange); }
+    .console .log-err { color: var(--red); }
+
+    footer {
+      padding: 12px 24px;
+      text-align: center;
+      font-size: 11px; color: var(--text-dim);
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .hidden-file { display: none; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo">S</div>
+        <div>
+          <h1>PUPPYPI · 运动调节工作台</h1>
+          <p>单舵机 / 多舵机精细调参 · 动作帧录制 · 新动作开发</p>
+        </div>
+      </div>
+      <div class="status-bar">
+        <div class="ip-input">
+          <label>板端 IP</label>
+          <input id="robotIp" type="text" value="192.168.1.4">
+          <button onclick="applyIp()">连接</button>
+        </div>
+        <div class="pill"><span id="wsDot" class="dot off"></span><span id="wsText">未连接</span></div>
+        <div class="pill"><span>姿态:</span><span id="poseText" style="color:var(--cyan)">--</span></div>
+      </div>
+    </header>
+
+    <main>
+      <div class="panel">
+        <h2 class="panel-title">四肢舵机控制</h2>
+
+        <div class="global-controls">
+          <div class="control-group">
+            <button class="btn small" onclick="selectAll(true)">全选</button>
+            <button class="btn small" onclick="selectAll(false)">清空</button>
+            <button class="btn small" onclick="invertSelect()">反选</button>
+          </div>
+          <div class="control-group">
+            <label>运动时间(ms)</label>
+            <input id="moveTime" type="number" value="300" min="20" max="3000" step="10">
+          </div>
+          <div class="control-group">
+            <button class="btn green" onclick="sendSelected()">发送选中舵机</button>
+            <button class="btn red" onclick="sendCommand('stop')">急停</button>
+            <button class="btn orange" onclick="sendCommand('stand')">恢复站立</button>
+          </div>
+          <label class="toggle">
+            <input id="realtime" type="checkbox">
+            <span class="toggle-switch"></span>
+            实时发送
+          </label>
+        </div>
+
+        <div class="servo-grid" id="servoGrid"></div>
+
+        <div>
+          <div class="section-title">快速预设</div>
+          <div class="presets">
+            <button class="btn small" onclick="loadPreset('middle')">全部中位</button>
+            <button class="btn small" onclick="loadPreset('stand')">站立</button>
+            <button class="btn small" onclick="loadPreset('sit')">坐下</button>
+            <button class="btn small" onclick="loadPreset('lie_down')">趴下</button>
+            <button class="btn small" onclick="saveCustomPreset()">保存当前为预设</button>
+            <button class="btn small" onclick="loadCustomPreset()">加载自定义预设</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">动作帧录制与回放</h2>
+
+        <div class="seq-controls">
+          <button class="btn green" onclick="addFrame()">➕ 添加当前姿态</button>
+          <button class="btn" onclick="playFrames()">▶ 播放全部</button>
+          <button class="btn red" onclick="stopPlayback()">⏹ 停止</button>
+          <button class="btn small" onclick="exportJson()">导出 JSON</button>
+            <button class="btn small" onclick="document.getElementById('importFile').click()">导入 JSON</button>
+            <input id="importFile" type="file" class="hidden-file" accept=".json" onchange="importJson(this)">
+          <button class="btn small red" onclick="clearFrames()">清空帧</button>
+        </div>
+
+        <div class="sequencer">
+          <div class="section-title">帧列表 (时间 ms / 8 路舵机脉宽)</div>
+          <div class="frame-list" id="frameList">
+            <div style="text-align:center;color:#5a6a7a;padding:20px 0;">暂无帧，调节舵机后点击“添加当前姿态”</div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div>
+            <div class="section-title">当前帧信息</div>
+            <div style="font-family:var(--mono);font-size:12px;color:var(--text-dim);line-height:1.6;">
+              总帧数: <b id="frameCount" style="color:var(--cyan)">0</b><br>
+              总时长: <b id="totalTime" style="color:var(--cyan)">0</b> ms
+            </div>
+          </div>
+          <div>
+            <div class="section-title">说明</div>
+            <div style="font-size:11px;color:var(--text-dim);line-height:1.6;">
+              勾选舵机后点击“发送选中舵机”可单独/批量控制。<br>
+              开启“实时发送”后，拖动滑块会立即下发。<br>
+              导出 JSON 后可在本文件夹使用 convert_json_to_d6a.py 转成 .d6a 动作组。
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">运行日志</div>
+          <div class="console" id="console"></div>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      通信协议: WebSocket → /puppy_action → UDP:5005 → servo_control 直接调用 setServoPulse
+    </footer>
+  </div>
+
+  <script>
+    // ================= 配置 =================
+    const DEFAULT_IP = '192.168.1.4';
+    const WS_PORT = 9090;
+    const PING_INTERVAL_MS = 2000;
+
+    let robotIp = localStorage.getItem('puppyIp') || DEFAULT_IP;
+    document.getElementById('robotIp').value = robotIp;
+
+    let ws = null;
+    let wsReconnectTimer = null;
+    let pingTimer = null;
+
+    let servoValues = new Array(9).fill(1500); // 1-indexed
+    let selected = new Array(9).fill(false);
+    let frames = [];
+    let playbackTimer = null;
+    let playbackIndex = -1;
+
+    // 舵机元数据：id, 名称, 最小/最大脉宽
+    const servoMeta = [
+      { id: 1, leg: 'FR', joint: '髋', min: 500, max: 2500 },
+      { id: 2, leg: 'FR', joint: '膝', min: 650, max: 2300 },
+      { id: 3, leg: 'FL', joint: '髋', min: 500, max: 2500 },
+      { id: 4, leg: 'FL', joint: '膝', min: 700, max: 2350 },
+      { id: 5, leg: 'BR', joint: '髋', min: 500, max: 2500 },
+      { id: 6, leg: 'BR', joint: '膝', min: 650, max: 2300 },
+      { id: 7, leg: 'BL', joint: '髋', min: 500, max: 2500 },
+      { id: 8, leg: 'BL', joint: '膝', min: 700, max: 2350 },
+    ];
+
+    // 预设姿态（可根据实际机型微调）
+    const presets = {
+      middle: [1500,1500,1500,1500,1500,1500,1500,1500],
+      stand:  [1500,1400,1500,1600,1500,1600,1500,1400],
+      sit:    [1500,1900,1500,1100,1500,1100,1500,1900],
+      lie_down:[1300,1800,1700,1200,1700,1200,1300,1800],
+    };
+
+    // ================= 初始化界面 =================
+    function init() {
+      const grid = document.getElementById('servoGrid');
+      const legs = {};
+      servoMeta.forEach(s => {
+        if (!legs[s.leg]) legs[s.leg] = [];
+        legs[s.leg].push(s);
+      });
+
+      for (const [leg, servos] of Object.entries(legs)) {
+        const card = document.createElement('div');
+        card.className = 'leg-card';
+        const titleMap = { FR: '前右 FR', FL: '前左 FL', BR: '后右 BR', BL: '后左 BL' };
+        card.innerHTML = `<div class="leg-title">${titleMap[leg]}</div>`;
+
+        servos.forEach(s => {
+          const row = document.createElement('div');
+          row.className = 'servo-row';
+          row.innerHTML = `
+            <input type="checkbox" id="sel-${s.id}" onchange="onSelect(${s.id})">
+            <label>S${s.id} ${s.joint}</label>
+            <input type="range" id="slider-${s.id}" min="${s.min}" max="${s.max}" value="1500"
+                   oninput="onSlider(${s.id}, this.value)" onchange="onSliderChange(${s.id}, this.value)">
+            <input type="number" id="num-${s.id}" min="${s.min}" max="${s.max}" value="1500"
+                   onchange="onNumber(${s.id}, this.value)">
+          `;
+          card.appendChild(row);
+        });
+        grid.appendChild(card);
+      }
+
+      // 加载自定义预设
+      const custom = localStorage.getItem('puppyCustomPreset');
+      if (custom) presets.custom = JSON.parse(custom);
+
+      connectWs();
+    }
+
+    // ================= WebSocket =================
+    function setDot(on) {
+      document.getElementById('wsDot').className = 'dot ' + (on ? 'on' : 'off');
+    }
+
+    function applyIp() {
+      robotIp = document.getElementById('robotIp').value.trim() || DEFAULT_IP;
+      localStorage.setItem('puppyIp', robotIp);
+      connectWs();
+    }
+
+    function connectWs() {
+      if (ws) { try { ws.close(); } catch(e){} ws = null; }
+      const url = `ws://${robotIp}:${WS_PORT}`;
+      try {
+        ws = new WebSocket(url);
+      } catch(e) {
+        log('WS 创建失败', 'err');
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = () => {
+        setDot(true);
+        document.getElementById('wsText').textContent = '已连接';
+        pingTimer = setInterval(() => sendWs({ type: 'ping' }), PING_INTERVAL_MS);
+        log('WebSocket 已连接', 'ok');
+      };
+      ws.onclose = () => {
+        setDot(false);
+        document.getElementById('wsText').textContent = '未连接';
+        if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+        scheduleReconnect();
+      };
+      ws.onerror = () => {
+        setDot(false);
+        document.getElementById('wsText').textContent = '错误';
+      };
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'action') {
+            const data = msg.data || {};
+            const mode = data.mode || data.action || '--';
+            document.getElementById('poseText').textContent = mode;
+          }
+        } catch(e){}
+      };
+    }
+
+    function scheduleReconnect() {
+      if (wsReconnectTimer) return;
+      wsReconnectTimer = setTimeout(() => { wsReconnectTimer = null; connectWs(); }, 2500);
+    }
+
+    function sendWs(obj) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify(obj));
+    }
+
+    // ================= 舵机交互 =================
+    function onSlider(id, value) {
+      servoValues[id] = parseInt(value);
+      document.getElementById(`num-${id}`).value = value;
+      if (document.getElementById('realtime').checked && selected[id]) {
+        sendServo(id, servoValues[id], getMoveTime());
+      }
+    }
+
+    function onSliderChange(id, value) {
+      servoValues[id] = parseInt(value);
+      document.getElementById(`num-${id}`).value = value;
+      if (document.getElementById('realtime').checked && selected[id]) {
+        sendServo(id, servoValues[id], getMoveTime());
+      }
+    }
+
+    function onNumber(id, value) {
+      const s = servoMeta.find(x => x.id === id);
+      let v = parseInt(value) || s.min;
+      v = Math.max(s.min, Math.min(s.max, v));
+      servoValues[id] = v;
+      document.getElementById(`slider-${id}`).value = v;
+      document.getElementById(`num-${id}`).value = v;
+      if (document.getElementById('realtime').checked && selected[id]) {
+        sendServo(id, v, getMoveTime());
+      }
+    }
+
+    function onSelect(id) {
+      selected[id] = document.getElementById(`sel-${id}`).checked;
+    }
+
+    function selectAll(state) {
+      servoMeta.forEach(s => {
+        selected[s.id] = state;
+        document.getElementById(`sel-${s.id}`).checked = state;
+      });
+    }
+
+    function invertSelect() {
+      servoMeta.forEach(s => {
+        selected[s.id] = !selected[s.id];
+        document.getElementById(`sel-${s.id}`).checked = selected[s.id];
+      });
+    }
+
+    function getMoveTime() {
+      const t = parseInt(document.getElementById('moveTime').value) || 300;
+      return Math.max(20, Math.min(3000, t));
+    }
+
+    function getSelectedServos() {
+      return servoMeta.filter(s => selected[s.id]).map(s => ({
+        id: s.id,
+        pulse: servoValues[s.id],
+        time: getMoveTime()
+      }));
+    }
+
+    function sendSelected() {
+      const servos = getSelectedServos();
+      if (!servos.length) {
+        log('请先勾选要控制的舵机', 'warn');
+        return;
+      }
+      sendWs({ type: 'servo_control', servos: servos, source: 'servo_tuner' });
+      log(`已发送 ${servos.length} 个舵机: ` + servos.map(s => `S${s.id}=${s.pulse}`).join(', '), 'info');
+    }
+
+    function sendServo(id, pulse, time) {
+      sendWs({ type: 'servo_control', servos: [{ id, pulse, time }], source: 'servo_tuner' });
+    }
+
+    function sendCommand(action) {
+      sendWs({ type: 'command', action: action });
+      log(`已发送指令: ${action}`, 'ok');
+    }
+
+    // ================= 预设 =================
+    function loadPreset(name) {
+      const values = presets[name];
+      if (!values) { log('预设不存在', 'warn'); return; }
+      servoMeta.forEach((s, idx) => {
+        servoValues[s.id] = values[idx];
+        document.getElementById(`slider-${s.id}`).value = values[idx];
+        document.getElementById(`num-${s.id}`).value = values[idx];
+      });
+      log(`已加载预设: ${name}`, 'info');
+      if (document.getElementById('realtime').checked) {
+        sendWs({ type: 'servo_control', servos: servoMeta.map(s => ({ id: s.id, pulse: servoValues[s.id], time: getMoveTime() })), source: 'servo_tuner' });
+      }
+    }
+
+    function saveCustomPreset() {
+      const values = servoMeta.map(s => servoValues[s.id]);
+      localStorage.setItem('puppyCustomPreset', JSON.stringify(values));
+      presets.custom = values;
+      log('已保存自定义预设', 'ok');
+    }
+
+    function loadCustomPreset() {
+      if (!presets.custom) { log('没有保存的自定义预设', 'warn'); return; }
+      loadPreset('custom');
+    }
+
+    // ================= 帧录制 / 回放 =================
+    function addFrame() {
+      const time = getMoveTime();
+      const values = servoMeta.map(s => servoValues[s.id]);
+      frames.push({ time, values: [...values] });
+      renderFrames();
+      log(`添加帧 #${frames.length} (time=${time}ms)`, 'ok');
+    }
+
+    function updateFrameTime(idx, time) {
+      frames[idx].time = Math.max(20, parseInt(time) || 300);
+      renderFrames();
+    }
+
+    function deleteFrame(idx) {
+      frames.splice(idx, 1);
+      renderFrames();
+    }
+
+    function moveFrame(idx, dir) {
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= frames.length) return;
+      [frames[idx], frames[newIdx]] = [frames[newIdx], frames[idx]];
+      renderFrames();
+    }
+
+    function clearFrames() {
+      frames = [];
+      renderFrames();
+    }
+
+    function renderFrames() {
+      const list = document.getElementById('frameList');
+      if (!frames.length) {
+        list.innerHTML = '<div style="text-align:center;color:#5a6a7a;padding:20px 0;">暂无帧，调节舵机后点击“添加当前姿态”</div>';
+      } else {
+        list.innerHTML = frames.map((f, i) => `
+          <div class="frame-item ${i === playbackIndex ? 'active' : ''}">
+            <span style="color:var(--cyan);min-width:30px;">#${i+1}</span>
+            <input type="number" value="${f.time}" min="20" max="3000" step="10"
+                   onchange="updateFrameTime(${i}, this.value)">
+            <div class="frame-values">${f.values.map((v, j) => `<span>S${j+1}:${v}</span>`).join('')}</div>
+            <div class="frame-actions">
+              <button onclick="loadFrame(${i})">加载</button>
+              <button onclick="moveFrame(${i}, -1)">↑</button>
+              <button onclick="moveFrame(${i}, 1)">↓</button>
+              <button onclick="deleteFrame(${i})" style="color:var(--red)">×</button>
+            </div>
+          </div>
+        `).join('');
+      }
+      document.getElementById('frameCount').textContent = frames.length;
+      document.getElementById('totalTime').textContent = frames.reduce((a, b) => a + b.time, 0);
+    }
+
+    function loadFrame(idx) {
+      const f = frames[idx];
+      servoMeta.forEach((s, i) => {
+        servoValues[s.id] = f.values[i];
+        document.getElementById(`slider-${s.id}`).value = f.values[i];
+        document.getElementById(`num-${s.id}`).value = f.values[i];
+      });
+      log(`已加载帧 #${idx+1}`, 'info');
+    }
+
+    async function playFrames() {
+      if (!frames.length) { log('没有可播放的帧', 'warn'); return; }
+      stopPlayback();
+      log('开始回放动作序列...', 'ok');
+      for (let i = 0; i < frames.length; i++) {
+        playbackIndex = i;
+        renderFrames();
+        const f = frames[i];
+        const servos = servoMeta.map((s, idx) => ({ id: s.id, pulse: f.values[idx], time: f.time }));
+        sendWs({ type: 'servo_control', servos: servos, source: 'servo_tuner' });
+        log(`播放帧 #${i+1} / ${frames.length}`, 'info');
+        await sleep(f.time);
+        if (playbackIndex === -1) break;
+      }
+      playbackIndex = -1;
+      renderFrames();
+      log('回放结束', 'ok');
+    }
+
+    function stopPlayback() {
+      playbackIndex = -1;
+      if (playbackTimer) { clearTimeout(playbackTimer); playbackTimer = null; }
+      renderFrames();
+    }
+
+    function sleep(ms) {
+      return new Promise(r => { playbackTimer = setTimeout(r, ms); });
+    }
+
+    // ================= JSON 导入/导出 =================
+    function exportJson() {
+      if (!frames.length) { log('没有可导出的帧', 'warn'); return; }
+      const data = {
+        version: '1.0',
+        created: new Date().toISOString(),
+        servo_map: servoMeta.map(s => ({ id: s.id, leg: s.leg, joint: s.joint, min: s.min, max: s.max })),
+        frames: frames
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `puppy_action_${new Date().getTime()}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      log('已导出 JSON', 'ok');
+    }
+
+    function importJson(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (Array.isArray(data.frames)) {
+            frames = data.frames.map(f => ({ time: f.time, values: [...f.values] }));
+            renderFrames();
+            log(`已导入 ${frames.length} 帧`, 'ok');
+          } else {
+            log('JSON 格式错误：缺少 frames 数组', 'err');
+          }
+        } catch(err) {
+          log('JSON 解析失败', 'err');
+        }
+      };
+      reader.readAsText(file);
+      input.value = '';
+    }
+
+    // ================= 日志 =================
+    function log(text, level='info') {
+      const consoleEl = document.getElementById('console');
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = 'log-' + level;
+      div.textContent = `[${time}] ${text}`;
+      consoleEl.appendChild(div);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    // ================= 启动 =================
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

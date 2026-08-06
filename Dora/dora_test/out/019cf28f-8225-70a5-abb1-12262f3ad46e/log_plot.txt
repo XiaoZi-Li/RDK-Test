@@ -1,0 +1,18 @@
+[Plot] 启动绘图节点
+[Plot] 检测到 DISPLAY，将打开图像窗口
+[Plot] Frame: 30 | 平均FPS: 5.2
+[Plot] Frame: 60 | 平均FPS: 5.6
+[Plot] Frame: 90 | 平均FPS: 5.7
+[Plot] Frame: 120 | 平均FPS: 5.7
+[Plot] Frame: 150 | 平均FPS: 5.5
+[Plot] Frame: 180 | 平均FPS: 5.3
+[Plot] Frame: 210 | 平均FPS: 5.2
+[Plot] Frame: 240 | 平均FPS: 5.1
+[Plot] Frame: 270 | 平均FPS: 5.1
+[Plot] Frame: 300 | 平均FPS: 5.1
+[Plot] Frame: 330 | 平均FPS: 5.1
+[Plot] Frame: 360 | 平均FPS: 5.0
+[Plot] Frame: 390 | 平均FPS: 5.0
+[Plot] Frame: 420 | 平均FPS: 5.0
+{"timestamp":"2026-03-15T17:35:05.131707Z","level":"WARN","fields":{"message":"timeout: node finished, but token DropToken(019cf290-d5a4-7903-aa68-ca3b9525506d) was still not dropped after 1s -> ignoring it"},"target":"dora_node_api::event_stream::thread"}
+[Plot] 总结: 424 帧, 平均FPS: 4.96
