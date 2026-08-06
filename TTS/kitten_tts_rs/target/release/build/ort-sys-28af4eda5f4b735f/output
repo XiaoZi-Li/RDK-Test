@@ -1,0 +1,13 @@
+cargo:rustc-check-cfg=cfg(link_error)
+cargo:rerun-if-env-changed=ORT_LIB_PATH
+cargo:rerun-if-env-changed=ORT_LIB_LOCATION
+cargo:rerun-if-env-changed=CARGO_NET_OFFLINE
+cargo:rerun-if-env-changed=ORT_SKIP_DOWNLOAD
+cargo:rerun-if-env-changed=ORT_OFFLINE
+[ort-sys] [DEBUG] Using prebuilt binaries
+[ort-sys] [DEBUG] looking for prebuilt binaries matching feature set: none
+cargo:rerun-if-env-changed=ORT_CXX_STDLIB
+cargo:rerun-if-env-changed=CXXSTDLIB
+cargo:rustc-link-lib=stdc++
+cargo:rustc-link-search=native=/home/sunrise/.cache/ort.pyke.io/dfbin/aarch64-unknown-linux-gnu/7e4f5fec4494cbf578c4e28082b0229c42f735523f584259028dde96acf3b092
+cargo:rustc-link-lib=static=onnxruntime

@@ -1,0 +1,16 @@
+# Opus codec reference implementation pkg-config file
+
+prefix=/app/TTS/kitten_tts_rs/target/release/build/audiopus_sys-9f61e4e8628f2750/out
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: Opus
+Description: Opus IETF audio codec (floating-point build)
+URL: https://opus-codec.org/
+Version: 0.2.2
+Requires:
+Conflicts:
+Libs: -L${libdir} -lopus
+Libs.private: -lm
+Cflags: -I${includedir}/opus

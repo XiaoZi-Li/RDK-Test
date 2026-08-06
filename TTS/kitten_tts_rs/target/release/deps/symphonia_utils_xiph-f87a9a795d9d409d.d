@@ -1,0 +1,10 @@
+/app/TTS/kitten_tts_rs/target/release/deps/symphonia_utils_xiph-f87a9a795d9d409d.d: /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/lib.rs /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/flac/mod.rs /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/flac/metadata.rs /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/vorbis/mod.rs
+
+/app/TTS/kitten_tts_rs/target/release/deps/libsymphonia_utils_xiph-f87a9a795d9d409d.rlib: /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/lib.rs /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/flac/mod.rs /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/flac/metadata.rs /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/vorbis/mod.rs
+
+/app/TTS/kitten_tts_rs/target/release/deps/libsymphonia_utils_xiph-f87a9a795d9d409d.rmeta: /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/lib.rs /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/flac/mod.rs /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/flac/metadata.rs /home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/vorbis/mod.rs
+
+/home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/lib.rs:
+/home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/flac/mod.rs:
+/home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/flac/metadata.rs:
+/home/sunrise/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/symphonia-utils-xiph-0.5.5/src/vorbis/mod.rs:

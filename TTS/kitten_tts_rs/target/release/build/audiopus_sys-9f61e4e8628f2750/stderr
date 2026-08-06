@@ -1,0 +1,271 @@
+configure.ac:37: warning: The macro `AC_MINGW32' is obsolete.
+configure.ac:37: You should run autoupdate.
+./lib/autoconf/specific.m4:347: AC_MINGW32 is expanded from...
+configure.ac:37: the top level
+configure.ac:38: warning: The macro `AM_PROG_LIBTOOL' is obsolete.
+configure.ac:38: You should run autoupdate.
+m4/libtool.m4:100: AM_PROG_LIBTOOL is expanded from...
+configure.ac:38: the top level
+configure.ac:41: warning: The macro `AC_PROG_CC_C99' is obsolete.
+configure.ac:41: You should run autoupdate.
+./lib/autoconf/c.m4:1659: AC_PROG_CC_C99 is expanded from...
+configure.ac:41: the top level
+configure.ac:172: warning: The macro `AC_WARN' is obsolete.
+configure.ac:172: You should run autoupdate.
+./lib/autoconf/oldnames.m4:33: AC_WARN is expanded from...
+lib/m4sugar/m4sh.m4:699: AS_IF is expanded from...
+./lib/autoconf/general.m4:1534: AC_ARG_ENABLE is expanded from...
+configure.ac:172: the top level
+configure.ac:199: warning: The macro `AC_TRY_COMPILE' is obsolete.
+configure.ac:199: You should run autoupdate.
+./lib/autoconf/general.m4:2847: AC_TRY_COMPILE is expanded from...
+m4/as-gcc-inline-assembly.m4:12: AS_GCC_INLINE_ASSEMBLY is expanded from...
+lib/m4sugar/m4sh.m4:699: AS_IF is expanded from...
+lib/m4sugar/m4sh.m4:699: AS_IF is expanded from...
+configure.ac:199: the top level
+configure.ac:459: warning: The macro `AC_HELP_STRING' is obsolete.
+configure.ac:459: You should run autoupdate.
+./lib/autoconf/general.m4:204: AC_HELP_STRING is expanded from...
+configure.ac:385: OPUS_PATH_NE10 is expanded from...
+lib/m4sugar/m4sh.m4:699: AS_IF is expanded from...
+lib/m4sugar/m4sh.m4:594: AS_CASE is expanded from...
+lib/m4sugar/m4sh.m4:699: AS_IF is expanded from...
+configure.ac:459: the top level
+configure.ac:38: installing './compile'
+configure.ac:36: installing './config.guess'
+configure.ac:36: installing './config.sub'
+configure.ac:33: installing './install-sh'
+configure.ac:33: installing './missing'
+Makefile.am:310: warning: '%'-style pattern rules are a GNU make extension
+Makefile.am:313: warning: '%'-style pattern rules are a GNU make extension
+Makefile.am: installing './INSTALL'
+Makefile.am: installing './depcomp'
+parallel-tests: installing './test-driver'
+包含于文件 ./silk/main.h:46,
+        于 silk/float/structs_FLP.h:32,
+        于 silk/float/main_FLP.h:33,
+        于 silk/float/wrappers_FLP.c:32:
+silk/float/wrappers_FLP.c: 在函数‘silk_NSQ_wrapper_FLP’中:
+./silk/arm/NSQ_del_dec_arm.h:53:18: 警告：‘silk_NSQ_del_dec_c’ reading 64 bytes from a region of size 32 [-Wstringop-overread]
+   53 |     ((void)(arch),                                                           \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   54 |      PRESUME_NEON(silk_NSQ_del_dec)(                                         \
+      |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   55 |          psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14,     \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   56 |          AR_Q13, HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   57 |          Lambda_Q10, LTP_scale_Q14))
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:164:9: 附注：在宏 ‘silk_NSQ_del_dec’ 展开时
+  164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~~~~~~~~~
+./silk/arm/NSQ_del_dec_arm.h:53:18: 附注：referencing argument 6 of type ‘const opus_int16[32]’ {或称 ‘const short int[32]’}
+   53 |     ((void)(arch),                                                           \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   54 |      PRESUME_NEON(silk_NSQ_del_dec)(                                         \
+      |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   55 |          psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14,     \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   56 |          AR_Q13, HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   57 |          Lambda_Q10, LTP_scale_Q14))
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:164:9: 附注：在宏 ‘silk_NSQ_del_dec’ 展开时
+  164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~~~~~~~~~
+./silk/arm/NSQ_del_dec_arm.h:53:18: 附注：referencing argument 7 of type ‘const opus_int16[20]’ {或称 ‘const short int[20]’}
+   53 |     ((void)(arch),                                                           \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   54 |      PRESUME_NEON(silk_NSQ_del_dec)(                                         \
+      |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   55 |          psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14,     \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   56 |          AR_Q13, HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   57 |          Lambda_Q10, LTP_scale_Q14))
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:164:9: 附注：在宏 ‘silk_NSQ_del_dec’ 展开时
+  164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~~~~~~~~~
+./silk/arm/NSQ_del_dec_arm.h:53:18: 附注：referencing argument 8 of type ‘const opus_int16[96]’ {或称 ‘const short int[96]’}
+   53 |     ((void)(arch),                                                           \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   54 |      PRESUME_NEON(silk_NSQ_del_dec)(                                         \
+      |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   55 |          psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14,     \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   56 |          AR_Q13, HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   57 |          Lambda_Q10, LTP_scale_Q14))
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:164:9: 附注：在宏 ‘silk_NSQ_del_dec’ 展开时
+  164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~~~~~~~~~
+./silk/arm/NSQ_del_dec_arm.h:53:18: 附注：referencing argument 9 of type ‘const int[4]’
+   53 |     ((void)(arch),                                                           \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   54 |      PRESUME_NEON(silk_NSQ_del_dec)(                                         \
+      |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   55 |          psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14,     \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   56 |          AR_Q13, HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   57 |          Lambda_Q10, LTP_scale_Q14))
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:164:9: 附注：在宏 ‘silk_NSQ_del_dec’ 展开时
+  164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~~~~~~~~~
+./silk/arm/NSQ_del_dec_arm.h:53:18: 附注：referencing argument 10 of type ‘const int[4]’
+   53 |     ((void)(arch),                                                           \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   54 |      PRESUME_NEON(silk_NSQ_del_dec)(                                         \
+      |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   55 |          psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14,     \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   56 |          AR_Q13, HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   57 |          Lambda_Q10, LTP_scale_Q14))
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:164:9: 附注：在宏 ‘silk_NSQ_del_dec’ 展开时
+  164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~~~~~~~~~
+./silk/arm/NSQ_del_dec_arm.h:53:18: 附注：referencing argument 11 of type ‘const opus_int32[4]’ {或称 ‘const int[4]’}
+   53 |     ((void)(arch),                                                           \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   54 |      PRESUME_NEON(silk_NSQ_del_dec)(                                         \
+      |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   55 |          psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14,     \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   56 |          AR_Q13, HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   57 |          Lambda_Q10, LTP_scale_Q14))
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:164:9: 附注：在宏 ‘silk_NSQ_del_dec’ 展开时
+  164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~~~~~~~~~
+./silk/arm/NSQ_del_dec_arm.h:53:18: 附注：referencing argument 12 of type ‘const opus_int32[4]’ {或称 ‘const int[4]’}
+   53 |     ((void)(arch),                                                           \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   54 |      PRESUME_NEON(silk_NSQ_del_dec)(                                         \
+      |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   55 |          psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14,     \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   56 |          AR_Q13, HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   57 |          Lambda_Q10, LTP_scale_Q14))
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:164:9: 附注：在宏 ‘silk_NSQ_del_dec’ 展开时
+  164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~~~~~~~~~
+./silk/arm/NSQ_del_dec_arm.h:53:18: 附注：referencing argument 13 of type ‘const int[4]’
+   53 |     ((void)(arch),                                                           \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   54 |      PRESUME_NEON(silk_NSQ_del_dec)(                                         \
+      |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   55 |          psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14,     \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   56 |          AR_Q13, HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, \
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   57 |          Lambda_Q10, LTP_scale_Q14))
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:164:9: 附注：在宏 ‘silk_NSQ_del_dec’ 展开时
+  164 |         silk_NSQ_del_dec( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~~~~~~~~~
+./silk/main.h:275:6: 附注：in a call to function ‘silk_NSQ_del_dec_c’
+  275 | void silk_NSQ_del_dec_c(
+      |      ^~~~~~~~~~~~~~~~~~
+./silk/main.h:270:18: 警告：‘silk_NSQ_c’ reading 64 bytes from a region of size 32 [-Wstringop-overread]
+  270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+      |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:167:9: 附注：在宏 ‘silk_NSQ’ 展开时
+  167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~
+./silk/main.h:270:18: 附注：referencing argument 6 of type ‘const opus_int16[32]’ {或称 ‘const short int[32]’}
+  270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+      |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:167:9: 附注：在宏 ‘silk_NSQ’ 展开时
+  167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~
+./silk/main.h:270:18: 附注：referencing argument 7 of type ‘const opus_int16[20]’ {或称 ‘const short int[20]’}
+  270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+      |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:167:9: 附注：在宏 ‘silk_NSQ’ 展开时
+  167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~
+./silk/main.h:270:18: 附注：referencing argument 8 of type ‘const opus_int16[96]’ {或称 ‘const short int[96]’}
+  270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+      |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:167:9: 附注：在宏 ‘silk_NSQ’ 展开时
+  167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~
+./silk/main.h:270:18: 附注：referencing argument 9 of type ‘const int[4]’
+  270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+      |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:167:9: 附注：在宏 ‘silk_NSQ’ 展开时
+  167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~
+./silk/main.h:270:18: 附注：referencing argument 10 of type ‘const int[4]’
+  270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+      |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:167:9: 附注：在宏 ‘silk_NSQ’ 展开时
+  167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~
+./silk/main.h:270:18: 附注：referencing argument 11 of type ‘const opus_int32[4]’ {或称 ‘const int[4]’}
+  270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+      |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:167:9: 附注：在宏 ‘silk_NSQ’ 展开时
+  167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~
+./silk/main.h:270:18: 附注：referencing argument 12 of type ‘const opus_int32[4]’ {或称 ‘const int[4]’}
+  270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+      |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:167:9: 附注：在宏 ‘silk_NSQ’ 展开时
+  167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~
+./silk/main.h:270:18: 附注：referencing argument 13 of type ‘const int[4]’
+  270 |     ((void)(arch),silk_NSQ_c(psEncC, NSQ, psIndices, x16, pulses, PredCoef_Q12, LTPCoef_Q14, AR_Q13, \
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  271 |                    HarmShapeGain_Q14, Tilt_Q14, LF_shp_Q14, Gains_Q16, pitchL, Lambda_Q10, LTP_scale_Q14))
+      |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:167:9: 附注：在宏 ‘silk_NSQ’ 展开时
+  167 |         silk_NSQ( &psEnc->sCmn, psNSQ, psIndices, x16, pulses, PredCoef_Q12[ 0 ], LTPCoef_Q14,
+      |         ^~~~~~~~
+./silk/main.h:249:6: 附注：in a call to function ‘silk_NSQ_c’
+  249 | void silk_NSQ_c(
+      |      ^~~~~~~~~~
+silk/float/wrappers_FLP.c: 在函数‘silk_quant_LTP_gains_FLP’中:
+silk/float/wrappers_FLP.c:200:5: 警告：‘XX_Q17’ may be used uninitialized [-Wmaybe-uninitialized]
+  200 |     silk_quant_LTP_gains( B_Q14, cbk_index, periodicity_index, sum_log_gain_Q7, &pred_gain_dB_Q7, XX_Q17, xX_Q17, subfr_len, nb_subfr, arch );
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./silk/main.h:211:6: 附注：by argument 6 of type ‘const opus_int32[100]’ {或称 ‘const int[100]’} to ‘silk_quant_LTP_gains’ declared here
+  211 | void silk_quant_LTP_gains(
+      |      ^~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:190:16: 附注：‘XX_Q17’在此声明
+  190 |     opus_int32 XX_Q17[ MAX_NB_SUBFR * LTP_ORDER * LTP_ORDER ];
+      |                ^~~~~~
+silk/float/wrappers_FLP.c:200:5: 警告：‘xX_Q17’ may be used uninitialized [-Wmaybe-uninitialized]
+  200 |     silk_quant_LTP_gains( B_Q14, cbk_index, periodicity_index, sum_log_gain_Q7, &pred_gain_dB_Q7, XX_Q17, xX_Q17, subfr_len, nb_subfr, arch );
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+./silk/main.h:211:6: 附注：by argument 7 of type ‘const opus_int32[20]’ {或称 ‘const int[20]’} to ‘silk_quant_LTP_gains’ declared here
+  211 | void silk_quant_LTP_gains(
+      |      ^~~~~~~~~~~~~~~~~~~~
+silk/float/wrappers_FLP.c:191:16: 附注：‘xX_Q17’在此声明
+  191 |     opus_int32 xX_Q17[ MAX_NB_SUBFR * LTP_ORDER ];
+      |                ^~~~~~

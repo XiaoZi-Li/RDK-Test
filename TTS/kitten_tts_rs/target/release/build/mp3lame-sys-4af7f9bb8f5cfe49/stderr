@@ -1,0 +1,7 @@
+make: 警告: 子 make 中强制 -j8: 重置 jobserver 模式。
+ar: `u' modifier ignored since `D' is the default (see `U')
+Makefile:622: 警告：忽略后缀规则定义的先决条件
+Makefile:619: 警告：忽略后缀规则定义的先决条件
+Makefile:622: 警告：忽略后缀规则定义的先决条件
+Makefile:619: 警告：忽略后缀规则定义的先决条件
+ar: `u' modifier ignored since `D' is the default (see `U')

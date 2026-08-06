@@ -1,0 +1,151 @@
+silk/float/inner_product_FLP.lo: silk/float/inner_product_FLP.c \
+ /usr/include/stdc-predef.h config.h silk/float/SigProc_FLP.h \
+ silk/SigProc_FIX.h /usr/include/string.h \
+ /usr/include/aarch64-linux-gnu/bits/libc-header-start.h \
+ /usr/include/features.h /usr/include/features-time64.h \
+ /usr/include/aarch64-linux-gnu/bits/wordsize.h \
+ /usr/include/aarch64-linux-gnu/bits/timesize.h \
+ /usr/include/aarch64-linux-gnu/sys/cdefs.h \
+ /usr/include/aarch64-linux-gnu/bits/long-double.h \
+ /usr/include/aarch64-linux-gnu/gnu/stubs.h \
+ /usr/include/aarch64-linux-gnu/gnu/stubs-lp64.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/stddef.h \
+ /usr/include/aarch64-linux-gnu/bits/types/locale_t.h \
+ /usr/include/aarch64-linux-gnu/bits/types/__locale_t.h \
+ /usr/include/strings.h \
+ /usr/include/aarch64-linux-gnu/bits/strings_fortified.h \
+ /usr/include/aarch64-linux-gnu/bits/string_fortified.h silk/typedef.h \
+ include/opus_types.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/stdint.h \
+ /usr/include/stdint.h /usr/include/aarch64-linux-gnu/bits/types.h \
+ /usr/include/aarch64-linux-gnu/bits/typesizes.h \
+ /usr/include/aarch64-linux-gnu/bits/time64.h \
+ /usr/include/aarch64-linux-gnu/bits/wchar.h \
+ /usr/include/aarch64-linux-gnu/bits/stdint-intn.h \
+ /usr/include/aarch64-linux-gnu/bits/stdint-uintn.h \
+ include/opus_defines.h include/opus_types.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/float.h \
+ silk/resampler_structs.h silk/macros.h celt/arch.h celt/ecintrin.h \
+ /usr/include/math.h /usr/include/aarch64-linux-gnu/bits/math-vector.h \
+ /usr/include/aarch64-linux-gnu/bits/libm-simd-decl-stubs.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include-fixed/aarch64-linux-gnu/bits/floatn.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include-fixed/aarch64-linux-gnu/bits/floatn-common.h \
+ /usr/include/aarch64-linux-gnu/bits/flt-eval-method.h \
+ /usr/include/aarch64-linux-gnu/bits/fp-logb.h \
+ /usr/include/aarch64-linux-gnu/bits/fp-fast.h \
+ /usr/include/aarch64-linux-gnu/bits/mathcalls-helper-functions.h \
+ /usr/include/aarch64-linux-gnu/bits/mathcalls.h \
+ /usr/include/aarch64-linux-gnu/bits/mathcalls-narrow.h \
+ /usr/include/aarch64-linux-gnu/bits/iscanonical.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/limits.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/syslimits.h \
+ /usr/include/limits.h /usr/include/aarch64-linux-gnu/bits/posix1_lim.h \
+ /usr/include/aarch64-linux-gnu/bits/local_lim.h \
+ /usr/include/linux/limits.h \
+ /usr/include/aarch64-linux-gnu/bits/pthread_stack_min-dynamic.h \
+ /usr/include/aarch64-linux-gnu/bits/pthread_stack_min.h \
+ /usr/include/aarch64-linux-gnu/bits/posix2_lim.h celt/arch.h \
+ silk/arm/macros_arm64.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/arm_neon.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/arm_private_fp8.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/arm_private_neon_types.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/arm_fp16.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/arm_bf16.h \
+ celt/cpu_support.h silk/arm/biquad_alt_arm.h celt/arm/armcpu.h \
+ silk/arm/LPC_inv_pred_gain_arm.h silk/Inlines.h silk/MacroCount.h \
+ /usr/include/stdio.h \
+ /usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/stdarg.h \
+ /usr/include/aarch64-linux-gnu/bits/types/__fpos_t.h \
+ /usr/include/aarch64-linux-gnu/bits/types/__mbstate_t.h \
+ /usr/include/aarch64-linux-gnu/bits/types/__fpos64_t.h \
+ /usr/include/aarch64-linux-gnu/bits/types/__FILE.h \
+ /usr/include/aarch64-linux-gnu/bits/types/FILE.h \
+ /usr/include/aarch64-linux-gnu/bits/types/struct_FILE.h \
+ /usr/include/aarch64-linux-gnu/bits/stdio_lim.h \
+ /usr/include/aarch64-linux-gnu/bits/stdio.h \
+ /usr/include/aarch64-linux-gnu/bits/stdio2.h silk/MacroDebug.h \
+ celt/float_cast.h
+/usr/include/stdc-predef.h:
+config.h:
+silk/float/SigProc_FLP.h:
+silk/SigProc_FIX.h:
+/usr/include/string.h:
+/usr/include/aarch64-linux-gnu/bits/libc-header-start.h:
+/usr/include/features.h:
+/usr/include/features-time64.h:
+/usr/include/aarch64-linux-gnu/bits/wordsize.h:
+/usr/include/aarch64-linux-gnu/bits/timesize.h:
+/usr/include/aarch64-linux-gnu/sys/cdefs.h:
+/usr/include/aarch64-linux-gnu/bits/long-double.h:
+/usr/include/aarch64-linux-gnu/gnu/stubs.h:
+/usr/include/aarch64-linux-gnu/gnu/stubs-lp64.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/stddef.h:
+/usr/include/aarch64-linux-gnu/bits/types/locale_t.h:
+/usr/include/aarch64-linux-gnu/bits/types/__locale_t.h:
+/usr/include/strings.h:
+/usr/include/aarch64-linux-gnu/bits/strings_fortified.h:
+/usr/include/aarch64-linux-gnu/bits/string_fortified.h:
+silk/typedef.h:
+include/opus_types.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/stdint.h:
+/usr/include/stdint.h:
+/usr/include/aarch64-linux-gnu/bits/types.h:
+/usr/include/aarch64-linux-gnu/bits/typesizes.h:
+/usr/include/aarch64-linux-gnu/bits/time64.h:
+/usr/include/aarch64-linux-gnu/bits/wchar.h:
+/usr/include/aarch64-linux-gnu/bits/stdint-intn.h:
+/usr/include/aarch64-linux-gnu/bits/stdint-uintn.h:
+include/opus_defines.h:
+include/opus_types.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/float.h:
+silk/resampler_structs.h:
+silk/macros.h:
+celt/arch.h:
+celt/ecintrin.h:
+/usr/include/math.h:
+/usr/include/aarch64-linux-gnu/bits/math-vector.h:
+/usr/include/aarch64-linux-gnu/bits/libm-simd-decl-stubs.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include-fixed/aarch64-linux-gnu/bits/floatn.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include-fixed/aarch64-linux-gnu/bits/floatn-common.h:
+/usr/include/aarch64-linux-gnu/bits/flt-eval-method.h:
+/usr/include/aarch64-linux-gnu/bits/fp-logb.h:
+/usr/include/aarch64-linux-gnu/bits/fp-fast.h:
+/usr/include/aarch64-linux-gnu/bits/mathcalls-helper-functions.h:
+/usr/include/aarch64-linux-gnu/bits/mathcalls.h:
+/usr/include/aarch64-linux-gnu/bits/mathcalls-narrow.h:
+/usr/include/aarch64-linux-gnu/bits/iscanonical.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/limits.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/syslimits.h:
+/usr/include/limits.h:
+/usr/include/aarch64-linux-gnu/bits/posix1_lim.h:
+/usr/include/aarch64-linux-gnu/bits/local_lim.h:
+/usr/include/linux/limits.h:
+/usr/include/aarch64-linux-gnu/bits/pthread_stack_min-dynamic.h:
+/usr/include/aarch64-linux-gnu/bits/pthread_stack_min.h:
+/usr/include/aarch64-linux-gnu/bits/posix2_lim.h:
+celt/arch.h:
+silk/arm/macros_arm64.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/arm_neon.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/arm_private_fp8.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/arm_private_neon_types.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/arm_fp16.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/arm_bf16.h:
+celt/cpu_support.h:
+silk/arm/biquad_alt_arm.h:
+celt/arm/armcpu.h:
+silk/arm/LPC_inv_pred_gain_arm.h:
+silk/Inlines.h:
+silk/MacroCount.h:
+/usr/include/stdio.h:
+/usr/local/gcc-15.2.0/lib/gcc/aarch64-unknown-linux-gnu/15.2.0/include/stdarg.h:
+/usr/include/aarch64-linux-gnu/bits/types/__fpos_t.h:
+/usr/include/aarch64-linux-gnu/bits/types/__mbstate_t.h:
+/usr/include/aarch64-linux-gnu/bits/types/__fpos64_t.h:
+/usr/include/aarch64-linux-gnu/bits/types/__FILE.h:
+/usr/include/aarch64-linux-gnu/bits/types/FILE.h:
+/usr/include/aarch64-linux-gnu/bits/types/struct_FILE.h:
+/usr/include/aarch64-linux-gnu/bits/stdio_lim.h:
+/usr/include/aarch64-linux-gnu/bits/stdio.h:
+/usr/include/aarch64-linux-gnu/bits/stdio2.h:
+silk/MacroDebug.h:
+celt/float_cast.h:
