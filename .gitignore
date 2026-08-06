@@ -1,0 +1,57 @@
+# 大文件/模型
+*.bin
+*.hbm
+*.onnx
+*.so
+*.so.*
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.rar
+*.gguf
+*.wav
+*.mp3
+*.mp4
+*.avi
+*.pth
+*.pt
+*.ckpt
+
+# 编译产物
+*.pyc
+*.pyo
+__pycache__/
+*.egg-info/
+build/
+install/
+log/
+*.log
+
+# 临时/缓存
+/tmp/
+tmp/
+.cache/
+*.prof
+
+# 模型目录
+/LLM/
+/TTS/
+/model/
+/models/
+/multimedia_samples/
+
+# ROS2 编译
+/puppy_ws/build/
+/puppy_ws/install/
+/puppy_ws/log/
+/puppy_ws/models/
+
+# 数据集/快照
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.pbm
+*.pgm
+*.ppm
