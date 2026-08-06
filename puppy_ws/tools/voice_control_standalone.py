@@ -305,9 +305,10 @@ class TtsEngine:
 
 # ============ UDP 动作发送 ============
 def send_action(action_name, ip='127.0.0.1', port=5005):
-    """发纯动作名字符串给 sit.py"""
+    """发 JSON 动作给运动仲裁器 / sit.py"""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.sendto(action_name.encode('utf-8'), (ip, port))
+    payload = json.dumps({'action': action_name, 'source': 'voice'}, ensure_ascii=False)
+    sock.sendto(payload.encode('utf-8'), (ip, port))
     sock.close()
     print(f'  [UDP] → {action_name}  (→ {ip}:{port})')
 
