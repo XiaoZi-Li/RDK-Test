@@ -373,7 +373,7 @@ motion_thread.start()
 # UDP 监听配置
 # =========================================================
 UDP_IP = "127.0.0.1"
-UDP_PORT = 5005
+UDP_PORT = int(os.environ.get("SIT_UDP_PORT", "5005"))
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((UDP_IP, UDP_PORT))
