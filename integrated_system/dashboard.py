@@ -604,6 +604,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
             ok, msg = send_udp_action("127.0.0.1", 5005, action, "dashboard")
             self.send_json({"ok": ok, "message": msg})
 
+        elif path == "/api/move":
+            # 持续运动控制 (遥控模式)
+            # POST body: {"forward": 0.5, "turn": 0.1, "source": "remote"}
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length) if content_length else b"{}"
+            try:
+                data = json.loads(body)
+                fwd = float(data.get("forward", 0.0))
+                trn = float(data.get("turn", 0.0))
+                source = data.get("source", "remote")
+                payload = json.dumps({
+                    "mode": "follow_control",
+                    "forward": max(-1.0, min(1.0, fwd)),
+                    "turn": max(-1.0, min(1.0, trn)),
+                    "source": source
+                })
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.sendto(payload.encode("utf-8"), ("127.0.0.1", 5005))
+                sock.close()
+                self.send_json({"ok": True, "message": f"follow_control fwd={fwd} turn={trn}"})
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)})
+
         else:
             self.send_error(404)
 
