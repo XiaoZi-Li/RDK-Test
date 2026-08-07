@@ -4,10 +4,13 @@
 # 运动控制优先级: 避障 > 语音 > 手势
 #
 # 用法:
-#   ./start_all.sh start    # 一键启动全部功能
-#   ./start_all.sh stop     # 停止全部
-#   ./start_all.sh status   # 查看各组件状态
-#   ./start_all.sh restart  # 重启
+#   ./start_all.sh start          # 一键启动全部功能
+#   ./start_all.sh stop           # 停止全部
+#   ./start_all.sh status         # 查看各组件状态
+#   ./start_all.sh restart        # 重启
+#   ./start_all.sh restart-stereo # 单独重启双目深度
+#   ./start_all.sh restart-robot  # 单独重启运动中枢
+#   ./start_all.sh dashboard      # 启动 Web 监控面板 (8080)
 # ============================================================================
 
 set -u
@@ -223,6 +226,52 @@ status_all() {
     echo "============================================================"
 }
 
+# ---------- 单独重启双目深度 ----------
+restart_stereo() {
+    echo "============================================================"
+    echo "[RESTART] 单独重启双目深度+AI  $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "============================================================"
+    /app/gs130w_stereo/scripts/start_v2.sh restart 2>&1
+    sleep 3
+    echo "[RESTART] 完成。避障可能需要手动重启:"
+    echo "  /app/gs130w_stereo/scripts/start_avoidance.sh restart"
+}
+
+# ---------- 单独重启运动中枢 ----------
+restart_robot() {
+    echo "============================================================"
+    echo "[RESTART] 单独重启运动中枢  $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "============================================================"
+    "$INTEGRATED_DIR/start_robot_minimal.sh" restart 2>&1
+    sleep 2
+    echo "[RESTART] 完成"
+}
+
+# ---------- 启动监控面板 ----------
+start_dashboard() {
+    # 先杀旧的
+    pkill -f 'dashboard.py' 2>/dev/null || true
+    sleep 1
+    echo "[DASHBOARD] 启动 Web 监控面板..."
+    python3 "$INTEGRATED_DIR/dashboard.py" \
+        --host 0.0.0.0 --port 8080 \
+        > "$LOG_DIR/dashboard.log" 2>&1 &
+    local pid=$!
+    sleep 2
+    local board_ip
+    board_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    [ -z "$board_ip" ] && board_ip="<板端IP>"
+    if kill -0 "$pid" 2>/dev/null; then
+        echo "============================================================"
+        echo " 监控面板已启动 (PID=$pid)"
+        echo " 访问: http://$board_ip:8080"
+        echo " 日志: $LOG_DIR/dashboard.log"
+        echo "============================================================"
+    else
+        echo "[ERROR] 监控面板启动失败, 看 $LOG_DIR/dashboard.log"
+    fi
+}
+
 # ---------- main ----------
 case "${1:-}" in
     start)
@@ -239,8 +288,17 @@ case "${1:-}" in
     status)
         status_all
         ;;
+    restart-stereo)
+        restart_stereo
+        ;;
+    restart-robot)
+        restart_robot
+        ;;
+    dashboard)
+        start_dashboard
+        ;;
     *)
-        echo "用法: $0 {start|stop|restart|status}"
+        echo "用法: $0 {start|stop|restart|status|restart-stereo|restart-robot|dashboard}"
         exit 1
         ;;
 esac
