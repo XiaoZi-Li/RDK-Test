@@ -119,6 +119,18 @@ class StereoAvoidanceNode(Node):
         self.turn_lock_dir = 0          # 0=无, 1=左转, -1=右转
         self.turn_lock_until = 0.0
 
+        # ==================== 避障状态机 ====================
+        # IDLE: 无障碍, 不发任何指令 (让仲裁器降级到语音/手势)
+        # STOP: 检测到障碍, 停车
+        # BACK: 后退
+        # TURN: 转向空旷侧
+        # ADVANCE: 前进绕开
+        # RETURN: 回正方向
+        self.avoid_state = 'IDLE'
+        self.avoid_state_start = 0.0
+        self.avoid_turn_dir = 0         # 1=左, -1=右 (RETURN 时反向)
+        self.last_obstacle_alert = 0.0  # 语音告警节流
+
         # ==================== 指令去重 ====================
         self.last_cmd = None
         self.last_cmd_time = 0.0
@@ -363,32 +375,30 @@ class StereoAvoidanceNode(Node):
         self.last_cmd_time = time.time()
 
     # ================================================================
-    #  决策主循环
+    #  决策主循环 — 状态机避障
     # ================================================================
 
     def decision_loop(self):
         result = self.analyze_depth()
+        now = time.time()
 
         if result is None:
-            # 无深度数据 → 停车等待
-            if self.use_follow_control:
-                self._send_follow(0.0, 0.0)
-            else:
+            # 无深度数据 → 如果不在避障序列中, 不发任何指令
+            if self.avoid_state != 'IDLE':
+                # 正在避障中但丢失深度 → 停车, 回 IDLE
                 self._send_cmd('stop')
+                self._set_state('IDLE')
             self._reset_target_yaw()
             self.turn_lock_dir = 0
             return
 
         left_p, center_p, right_p, source = result
-        now = time.time()
 
         # 节流日志
         if now - self._last_log > 1.0:
-            yaw_corr = self._get_yaw_correction()
             self.get_logger().info(
                 f'[{source}] L={left_p:.1f} C={center_p:.1f} R={right_p:.1f} '
-                f'| yaw_corr={yaw_corr:.3f} '
-                f'| lock={self.turn_lock_dir} '
+                f'| state={self.avoid_state} '
                 f'| cmd={self.last_cmd}'
             )
             self._last_log = now
@@ -402,85 +412,107 @@ class StereoAvoidanceNode(Node):
             "danger": round(self.danger_disp, 1),
             "clear": round(self.clear_disp, 1),
             "enable_motion": self.enable_motion,
+            "avoid_state": self.avoid_state,
             "turn_lock": self.turn_lock_dir,
-            "target_yaw": round(self.target_yaw, 3) if self.target_yaw else None,
-            "integrated_yaw": round(self.integrated_yaw, 3),
             "last_cmd": self.last_cmd
         })
         smsg = String()
         smsg.data = status
         self.status_pub.publish(smsg)
 
-        if self.use_follow_control:
-            self._decide_follow(left_p, center_p, right_p, now)
-        else:
-            self._decide_discrete(left_p, center_p, right_p)
+        # 状态机决策
+        self._decide_state_machine(left_p, center_p, right_p, now)
 
-    # ---------- follow_control 模式 (默认, 流畅) ----------
+    def _set_state(self, state):
+        """切换避障状态"""
+        if self.avoid_state != state:
+            self.get_logger().info(f'[AVOID] {self.avoid_state} → {state}')
+        self.avoid_state = state
+        self.avoid_state_start = time.time()
 
-    def _decide_follow(self, left_p, center_p, right_p, now):
+    def _decide_state_machine(self, left_p, center_p, right_p, now):
+        """状态机避障策略
+
+        IDLE: 无障碍时不发指令, 让仲裁器降级到语音/手势
+              检测到障碍 → STOP
+        STOP: 停车 0.5s → BACK
+        BACK: 后退 1.5s → TURN (判断哪边空旷)
+        TURN: 转向 0.8s → ADVANCE
+        ADVANCE: 前进 1.5s → RETURN
+        RETURN: 反向回转 0.8s → IDLE
+        """
         danger = self.danger_disp
-        clear = self.clear_disp
+        elapsed = now - self.avoid_state_start
 
-        # 转向锁定中 → 继续当前方向
-        if self.turn_lock_dir != 0 and now < self.turn_lock_until:
-            self._send_follow(0.0, TURN_SPEED * self.turn_lock_dir)
+        # ---------- IDLE: 监测障碍 ----------
+        if self.avoid_state == 'IDLE':
+            if center_p > danger or left_p > danger or right_p > danger:
+                # 检测到障碍!
+                self._send_cmd('stop')
+                self._set_state('STOP')
+                # 语音告警 (节流 5s 一次)
+                if now - self.last_obstacle_alert > 5.0:
+                    self.last_obstacle_alert = now
+                    self.get_logger().warn('前方有障碍! 启动避障')
+            # 无障碍 → 不发任何指令, 仲裁器自动降级到语音/手势
             return
 
-        # 演示/极端模式: 左/中/右任意一边过 danger 都触发转向
-        if center_p > danger or left_p > danger or right_p > danger:
-            # ===== 有障碍, 需要转向或后退 =====
-            self._reset_target_yaw()
+        # ---------- STOP: 停车 0.5s ----------
+        if self.avoid_state == 'STOP':
+            self._send_cmd('stop')
+            if elapsed > 0.5:
+                self._set_state('BACK')
+            return
 
-            # 哪边空旷就往哪边转
-            if left_p < right_p - 2.0:
-                # 左侧更空旷 → 左转
-                self.turn_lock_dir = 1
-                self.turn_lock_until = now + self.turn_lock_sec
-                self._send_follow(0.0, TURN_SPEED)
-            elif right_p < left_p - 2.0:
-                # 右侧更空旷 → 右转
-                self.turn_lock_dir = -1
-                self.turn_lock_until = now + self.turn_lock_sec
-                self._send_follow(0.0, -TURN_SPEED)
-            else:
-                # 两侧都堵 → 后退
-                self.turn_lock_dir = 0
-                self._send_follow(FWD_BACKWARD, 0.0)
-
-        elif center_p > clear:
-            # ===== 接近障碍, 减速前进 + IMU 修正 (减半) =====
-            self.turn_lock_dir = 0
-            self._ensure_target_yaw()
-            yaw_corr = self._get_yaw_correction() * 0.5
-            self._send_follow(FWD_SLOW, yaw_corr)
-
-        else:
-            # ===== 路径畅通, 正常前进 + IMU 修正 =====
-            self.turn_lock_dir = 0
-            self._ensure_target_yaw()
-            yaw_corr = self._get_yaw_correction()
-            self._send_follow(FWD_NORMAL, yaw_corr)
-
-    # ---------- 离散模式 (兼容, 不推荐) ----------
-
-    def _decide_discrete(self, left_p, center_p, right_p):
-        danger = self.danger_disp
-        clear = self.clear_disp
-
-        if center_p > danger:
-            if self.last_cmd not in ('turn_left', 'turn_right', 'backward', 'stop'):
-                self._send_cmd('stop')
-            elif self.last_cmd == 'stop':
+        # ---------- BACK: 后退 1.5s ----------
+        if self.avoid_state == 'BACK':
+            self._send_cmd('backward')
+            if elapsed > 1.5:
+                # 判断哪边更空旷
                 if left_p < right_p - 2.0:
-                    self._send_cmd('turn_left')
+                    self.avoid_turn_dir = 1   # 左转
                 elif right_p < left_p - 2.0:
-                    self._send_cmd('turn_right')
+                    self.avoid_turn_dir = -1  # 右转
                 else:
-                    self._send_cmd('backward')
-        elif center_p < clear:
-            if self.last_cmd != 'forward':
-                self._send_cmd('forward')
+                    # 两边差不多, 默认左转
+                    self.avoid_turn_dir = 1
+                self._set_state('TURN')
+            return
+
+        # ---------- TURN: 转向空旷侧 0.8s ----------
+        if self.avoid_state == 'TURN':
+            if self.avoid_turn_dir > 0:
+                self._send_cmd('turn_left')
+            else:
+                self._send_cmd('turn_right')
+            if elapsed > 0.8:
+                self._send_cmd('stop')
+                self._set_state('ADVANCE')
+            return
+
+        # ---------- ADVANCE: 前进绕开 1.5s ----------
+        if self.avoid_state == 'ADVANCE':
+            # 如果前方仍然有障碍, 重新进入 STOP
+            if center_p > danger:
+                self._send_cmd('stop')
+                self._set_state('STOP')
+                return
+            self._send_cmd('forward')
+            if elapsed > 1.5:
+                self._send_cmd('stop')
+                self._set_state('RETURN')
+            return
+
+        # ---------- RETURN: 回正方向 0.8s ----------
+        if self.avoid_state == 'RETURN':
+            if self.avoid_turn_dir > 0:
+                self._send_cmd('turn_right')
+            else:
+                self._send_cmd('turn_left')
+            if elapsed > 0.8:
+                self._send_cmd('stop')
+                self._set_state('IDLE')
+            return
 
     # ================================================================
     #  退出清理
@@ -488,10 +520,7 @@ class StereoAvoidanceNode(Node):
 
     def destroy_node(self):
         try:
-            if self.use_follow_control:
-                self._send_follow(0.0, 0.0)
-            else:
-                self._send_cmd('stop')
+            self._send_cmd('stop')
             time.sleep(0.1)
         except Exception:
             pass
