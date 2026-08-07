@@ -29,6 +29,14 @@ PID_FILE="$LOG_DIR/robot_minimal.pids"
 # 集成模式: sit.py 绑 5006, 仲裁器在 5005
 export SIT_UDP_PORT="${SIT_UDP_PORT:-5006}"
 
+# 后台启动函数: 用 nohup 让进程脱离终端, 避免被父 shell 退出杀掉
+launch_bg() {
+    local logfile=$1
+    shift
+    nohup "$@" > "$logfile" 2>&1 &
+    echo $!
+}
+
 source_tros() {
     set +u
     # shellcheck disable=SC1090
@@ -60,8 +68,7 @@ start_all() {
     # ---------- 1. sit.py (运动中枢) ----------
     echo "[START] 1/4 启动运动中枢 sit.py (UDP:$SIT_UDP_PORT)..."
     cd "$SIT_DIR"
-    SIT_UDP_PORT="$SIT_UDP_PORT" "$SIT_PYTHON" "$SIT_PY" > "$LOG_DIR/sit.log" 2>&1 &
-    SIT_PID=$!
+    SIT_PID=$(launch_bg "$LOG_DIR/sit.log" "$SIT_PYTHON" "$SIT_PY")
     echo "sit:$SIT_PID" >> "$PID_FILE"
     cd - > /dev/null
 
@@ -85,28 +92,25 @@ start_all() {
 
     # ---------- 3. IMU ----------
     echo "[START] 2/4 启动 IMU 节点..."
-    ros2 run puppy_brain imu_node_ros2 \
-        --ros-args -p topic_name:=/ros_robot_controller/imu_raw -p publish_hz:=50.0 \
-        > "$LOG_DIR/imu.log" 2>&1 &
-    echo "imu:$!" >> "$PID_FILE"
+    IMU_PID=$(launch_bg "$LOG_DIR/imu.log" ros2 run puppy_brain imu_node_ros2 \
+        --ros-args -p topic_name:=/ros_robot_controller/imu_raw -p publish_hz:=50.0)
+    echo "imu:$IMU_PID" >> "$PID_FILE"
     sleep 1
 
     # ---------- 4. WebSocket 桥 (供上位机) ----------
     echo "[START] 3/4 启动 WebSocket 桥 (9090)..."
-    ros2 run puppy_brain ws_bridge_node \
-        --ros-args --log-level info \
-        > "$LOG_DIR/ws.log" 2>&1 &
-    echo "ws:$!" >> "$PID_FILE"
+    WS_PID=$(launch_bg "$LOG_DIR/ws.log" ros2 run puppy_brain ws_bridge_node \
+        --ros-args --log-level info)
+    echo "ws:$WS_PID" >> "$PID_FILE"
     sleep 1
 
     # ---------- 5. ROS/UDP 桥 (ROS topic → 仲裁器 5005) ----------
     echo "[START] 4/4 启动 ROS/UDP 桥 (→ 127.0.0.1:5005)..."
-    ros2 run puppy_brain ros_udp_bridge \
+    ROSUDP_PID=$(launch_bg "$LOG_DIR/ros_udp.log" ros2 run puppy_brain ros_udp_bridge \
         --ros-args \
         -p udp_ip:=127.0.0.1 -p udp_port:=5005 \
-        -p imu_udp_ip:=127.0.0.1 -p imu_udp_port:=5006 \
-        > "$LOG_DIR/ros_udp.log" 2>&1 &
-    echo "ros_udp:$!" >> "$PID_FILE"
+        -p imu_udp_ip:=127.0.0.1 -p imu_udp_port:=5006)
+    echo "ros_udp:$ROSUDP_PID" >> "$PID_FILE"
     sleep 1
 
     echo ""

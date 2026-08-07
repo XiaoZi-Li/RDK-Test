@@ -634,7 +634,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description="机器狗监控面板")
     parser.add_argument("--host", default="0.0.0.0", help="监听地址")
-    parser.add_argument("--port", type=int, default=8080, help="监听端口")
+    parser.add_argument("--port", type=int, default=8081, help="监听端口")
     args = parser.parse_args()
 
     board_ip = get_board_ip()
@@ -648,21 +648,31 @@ def main():
     class ReuseHTTPServer(HTTPServer):
         allow_reuse_address = True
 
-    # 清理旧的 dashboard 进程 (排除自己)
+    # 清理旧的 dashboard 进程 (排除自己, 排除 trae-sandbox)
     try:
         my_pid = os.getpid()
         result = subprocess.run(
-            ["pgrep", "-f", "dashboard.py"],
-            capture_output=True, text=True, timeout=2
+            ["ps", "aux"], capture_output=True, text=True, timeout=2
         )
-        for pid_str in result.stdout.strip().split("\n"):
-            pid_str = pid_str.strip()
-            if pid_str and pid_str != str(my_pid):
-                try:
-                    os.kill(int(pid_str), 9)
-                except Exception:
-                    pass
-        time.sleep(0.3)
+        for line in result.stdout.strip().split("\n"):
+            if "dashboard.py" not in line:
+                continue
+            if "grep" in line or "trae" in line or "crashpad" in line:
+                continue
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            try:
+                pid = int(parts[1])
+            except ValueError:
+                continue
+            if pid == my_pid:
+                continue
+            try:
+                os.kill(pid, 15)  # SIGTERM
+            except Exception:
+                pass
+        time.sleep(1.0)
     except Exception:
         pass
 

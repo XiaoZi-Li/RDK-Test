@@ -44,6 +44,9 @@ SOURCE_PRIORITY = {
     "stereo_avoid": 0,
     "avoid": 0,
     "voice": 1,
+    "pc": 1,
+    "pc_joystick": 1,
+    "dashboard": 1,
     "gesture": 2,
 }
 

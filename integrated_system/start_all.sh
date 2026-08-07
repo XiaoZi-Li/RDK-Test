@@ -27,6 +27,35 @@ export ARBITER_SIT_IP="${ARBITER_SIT_IP:-127.0.0.1}"
 
 mkdir -p "$LOG_DIR"
 
+# 后台启动函数: 用 nohup + setsid 让进程脱离终端, 避免被 IDE 杀掉
+launch_bg() {
+    local logfile=$1
+    shift
+    nohup setsid "$@" > "$logfile" 2>&1 &
+    echo $!
+}
+
+# 检查进程是否存在 (排除 trae-sandbox 自身)
+check_proc() {
+    local name=$1
+    local pattern=$2
+    # pgrep -f 可能匹配到 trae-sandbox 进程 (其命令行包含脚本内容)
+    # 用 ps + grep 排除 trae 和 crashpad
+    if ps aux 2>/dev/null | grep -E "$pattern" | grep -v grep | grep -v trae | grep -v crashpad | grep -q .; then
+        echo "✅ $name"
+    else
+        echo "❌ $name"
+    fi
+}
+
+# 安全杀进程 (排除 trae-sandbox 和 crashpad, 避免误杀 IDE)
+safe_kill() {
+    local pattern=$1
+    ps aux 2>/dev/null | grep -E "$pattern" | grep -v grep | grep -v trae | grep -v crashpad | awk '{print $2}' | xargs -r kill 2>/dev/null
+    sleep 0.5
+    ps aux 2>/dev/null | grep -E "$pattern" | grep -v grep | grep -v trae | grep -v crashpad | awk '{print $2}' | xargs -r kill -9 2>/dev/null
+}
+
 # ---------- 工具函数 ----------
 wait_for_udp() {
     local port=$1
@@ -82,12 +111,10 @@ start_all() {
 
     # ---------- 1. 运动仲裁器 ----------
     echo "[START] 1/7 启动运动仲裁器 (UDP:$ARBITER_LISTEN_PORT → $ARBITER_SIT_PORT)..."
-    python3 "$INTEGRATED_DIR/motion_arbiter.py" \
+    arb_pid=$(launch_bg "$LOG_DIR/arbiter.log" python3 -u "$INTEGRATED_DIR/motion_arbiter.py" \
         --listen-port "$ARBITER_LISTEN_PORT" \
         --sit-port "$ARBITER_SIT_PORT" \
-        --sit-ip "$ARBITER_SIT_IP" \
-        > "$LOG_DIR/arbiter.log" 2>&1 &
-    record_pid "arbiter" $!
+        --sit-ip "$ARBITER_SIT_IP")
     wait_for_udp "$ARBITER_LISTEN_PORT" "运动仲裁器"
     sleep 1
 
@@ -112,41 +139,36 @@ start_all() {
     # ---------- 5. YOLO 显示 (独占 USB 摄像头) ----------
     echo "[START] 5/8 启动 YOLO 显示 (http://<ip>:8093)..."
     cd /app/standalone
-    python3 yolo_display.py --device /dev/video0 --port 8093 \
-        > "$LOG_DIR/yolo_display.log" 2>&1 &
-    record_pid "yolo" $!
+    yolo_pid=$(launch_bg "$LOG_DIR/yolo_display.log" python3 yolo_display.py \
+        --device /dev/video0 --port 8093)
     cd - > /dev/null
     sleep 3
 
     # ---------- 6. 手势控制 (从 YOLO MJPEG 流读取, 避免摄像头冲突) ----------
     echo "[START] 6/8 启动手势控制 (从 YOLO 流读取, http://<ip>:8094)..."
     cd /app/standalone
-    python3 gesture_control.py \
+    gesture_pid=$(launch_bg "$LOG_DIR/gesture_control.log" python3 gesture_control.py \
         --device http://127.0.0.1:8093/stream \
         --port 8094 \
-        --udp-port 5005 \
-        > "$LOG_DIR/gesture_control.log" 2>&1 &
-    record_pid "gesture" $!
+        --udp-port 5005)
     cd - > /dev/null
     sleep 2
 
     # ---------- 7. 语音助手（云端 LLM 对话 + 意图识别控制） ----------
     echo "[START] 7/8 启动语音助手（DeepSeek LLM）..."
-    python3 "$INTEGRATED_DIR/voice_assistant.py" \
+    voice_pid=$(launch_bg "$LOG_DIR/voice_assistant.log" python3 "$INTEGRATED_DIR/voice_assistant.py" \
         --mic plughw:1,0 \
         --speaker plughw:0,0 \
         --gain 10 \
         --vad-aggressiveness 2 \
-        --silence 1.0 \
-        > "$LOG_DIR/voice_assistant.log" 2>&1 &
-    record_pid "voice" $!
+        --silence 1.0)
 
     # ---------- 8. Web 监控面板 ----------
-    echo "[START] 8/8 启动 Web 监控面板 (http://0.0.0.0:8080)..."
-    python3 "$INTEGRATED_DIR/dashboard.py" \
-        --host 0.0.0.0 --port 8080 \
-        > "$LOG_DIR/dashboard.log" 2>&1 &
-    record_pid "dashboard" $!
+    echo "[START] 8/8 启动 Web 监控面板 (http://0.0.0.0:8081)..."
+    dashboard_pid=$(launch_bg "$LOG_DIR/dashboard.log" python3 -u "$INTEGRATED_DIR/dashboard.py" \
+        --host 0.0.0.0 --port 8081)
+    record_pid "dashboard" "$dashboard_pid"
+    sleep 2
 
     BOARD_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
     [ -z "$BOARD_IP" ] && BOARD_IP="<板端IP>"
@@ -181,11 +203,11 @@ stop_all() {
 
     # 1. 停止独立进程
     echo "[STOP] 1/4 停止语音/手势/YOLO/仲裁器..."
-    pkill -f 'voice_assistant.py' 2>/dev/null || true
-    pkill -f 'gesture_control.py' 2>/dev/null || true
-    pkill -f 'yolo_display.py' 2>/dev/null || true
-    pkill -f 'motion_arbiter.py' 2>/dev/null || true
-    pkill -f 'dashboard.py' 2>/dev/null || true
+    safe_kill 'voice_assistant.py'
+    safe_kill 'gesture_control.py'
+    safe_kill 'yolo_display.py'
+    safe_kill 'motion_arbiter.py'
+    safe_kill 'dashboard.py'
 
     # 2. 停止避障
     echo "[STOP] 2/4 停止避障..."
@@ -210,16 +232,6 @@ status_all() {
     echo "============================================================"
     echo "[STATUS] 一键集成系统  $(date '+%Y-%m-%d %H:%M:%S')"
     echo "============================================================"
-
-    check_proc() {
-        local name=$1
-        local pattern=$2
-        if pgrep -f "$pattern" > /dev/null 2>&1; then
-            echo "✅ $name"
-        else
-            echo "❌ $name"
-        fi
-    }
 
     check_proc "运动仲裁器" "motion_arbiter.py"
     check_proc "双目深度+AI (v2)" "start_v2.sh"
@@ -271,14 +283,13 @@ restart_robot() {
 
 # ---------- 启动监控面板 ----------
 start_dashboard() {
-    # 先杀旧的
-    pkill -f 'dashboard.py' 2>/dev/null || true
+    # 先杀旧的 (排除 trae)
+    safe_kill 'dashboard.py'
     sleep 1
     echo "[DASHBOARD] 启动 Web 监控面板..."
-    python3 "$INTEGRATED_DIR/dashboard.py" \
-        --host 0.0.0.0 --port 8080 \
-        > "$LOG_DIR/dashboard.log" 2>&1 &
-    local pid=$!
+    local pid
+    pid=$(launch_bg "$LOG_DIR/dashboard.log" python3 -u "$INTEGRATED_DIR/dashboard.py" \
+        --host 0.0.0.0 --port 8081)
     sleep 2
     local board_ip
     board_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -286,7 +297,7 @@ start_dashboard() {
     if kill -0 "$pid" 2>/dev/null; then
         echo "============================================================"
         echo " 监控面板已启动 (PID=$pid)"
-        echo " 访问: http://$board_ip:8080"
+        echo " 访问: http://$board_ip:8081"
         echo " 日志: $LOG_DIR/dashboard.log"
         echo "============================================================"
     else

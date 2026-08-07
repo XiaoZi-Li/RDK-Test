@@ -20,6 +20,8 @@
 """
 import asyncio
 import json
+import os
+import socket
 import threading
 import time
 
@@ -73,6 +75,12 @@ class WsBridgeNode(Node):
 
         # IMU 节流
         self.last_imu_send = 0.0
+
+        # ============ UDP 直连仲裁器 (集成模式: 不依赖 decision_node) ============
+        # PC 上位机指令直接 UDP 发给仲裁器, 绕过 /voice/result_json 话题
+        self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.arbiter_ip = os.environ.get('ARBITER_SIT_IP', '127.0.0.1')
+        self.arbiter_port = int(os.environ.get('ARBITER_LISTEN_PORT', '5005'))
 
         # ============ 启动 WS 服务(独立线程 + 自己的 event loop) ============
         if websockets is None:
@@ -245,7 +253,6 @@ class WsBridgeNode(Node):
         if t == 'command':
             # 离散动作: sit/stand/stop/forward/backward/turn_left/turn_right/
             #          follow_start/follow_stop
-            # 走 /voice/result_json, 由 decision_node 统一处理(和语音同通道)
             action = obj.get('action')
             if not action:
                 return
@@ -259,7 +266,10 @@ class WsBridgeNode(Node):
             msg = String()
             msg.data = json.dumps(payload, ensure_ascii=False)
             self.voice_pub.publish(msg)
-            self.get_logger().info(f'[PC->voice] command={action}')
+            # 集成模式: 直接 UDP 发给仲裁器 (source=voice, 优先级=1)
+            udp_payload = json.dumps({"action": action, "source": "voice"}, ensure_ascii=False)
+            self.udp_sock.sendto(udp_payload.encode('utf-8'), (self.arbiter_ip, self.arbiter_port))
+            self.get_logger().info(f'[PC->arbiter] command={action}')
 
         elif t == 'follow_control':
             # 连续摇杆控制: 直接发 /puppy_action, 不经 decision_node
@@ -280,6 +290,14 @@ class WsBridgeNode(Node):
             msg = String()
             msg.data = json.dumps(payload, ensure_ascii=False)
             self.action_pub.publish(msg)
+            # 集成模式: 直接 UDP 发给仲裁器 (source=voice, 优先级=1)
+            udp_payload = json.dumps({
+                "mode": "follow_control",
+                "forward": forward,
+                "turn": turn,
+                "source": "voice"
+            }, ensure_ascii=False)
+            self.udp_sock.sendto(udp_payload.encode('utf-8'), (self.arbiter_ip, self.arbiter_port))
 
         elif t == 'chat':
             # 聊天文本 -> /chat/input_text -> chat_llm_bridge -> llm
@@ -305,7 +323,10 @@ class WsBridgeNode(Node):
             msg = String()
             msg.data = json.dumps(payload, ensure_ascii=False)
             self.voice_pub.publish(msg)
-            self.get_logger().info(f'[PC->voice] {action}')
+            # 集成模式: 直接 UDP 发给仲裁器
+            udp_payload = json.dumps({"action": action, "source": "voice"}, ensure_ascii=False)
+            self.udp_sock.sendto(udp_payload.encode('utf-8'), (self.arbiter_ip, self.arbiter_port))
+            self.get_logger().info(f'[PC->arbiter] {action}')
 
         elif t == 'ping':
             # 客户端心跳, 直接回 pong
