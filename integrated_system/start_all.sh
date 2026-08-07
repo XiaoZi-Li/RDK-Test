@@ -109,18 +109,23 @@ start_all() {
     /app/gs130w_stereo/scripts/start_avoidance.sh start > "$LOG_DIR/start_avoidance.log" 2>&1
     sleep 3
 
-    # ---------- 5. YOLO 显示 ----------
-    echo "[START] 5/7 启动 YOLO 显示 (http://<ip>:8093)..."
+    # ---------- 5. YOLO 显示 (独占 USB 摄像头) ----------
+    echo "[START] 5/8 启动 YOLO 显示 (http://<ip>:8093)..."
     cd /app/standalone
-    python3 yolo_display.py > "$LOG_DIR/yolo_display.log" 2>&1 &
+    python3 yolo_display.py --device /dev/video0 --port 8093 \
+        > "$LOG_DIR/yolo_display.log" 2>&1 &
     record_pid "yolo" $!
     cd - > /dev/null
-    sleep 2
+    sleep 3
 
-    # ---------- 6. 手势控制 ----------
-    echo "[START] 6/7 启动手势控制 (USB 摄像头)..."
+    # ---------- 6. 手势控制 (从 YOLO MJPEG 流读取, 避免摄像头冲突) ----------
+    echo "[START] 6/8 启动手势控制 (从 YOLO 流读取, http://<ip>:8094)..."
     cd /app/standalone
-    python3 gesture_control.py > "$LOG_DIR/gesture_control.log" 2>&1 &
+    python3 gesture_control.py \
+        --device http://127.0.0.1:8093/stream \
+        --port 8094 \
+        --udp-port 5005 \
+        > "$LOG_DIR/gesture_control.log" 2>&1 &
     record_pid "gesture" $!
     cd - > /dev/null
     sleep 2

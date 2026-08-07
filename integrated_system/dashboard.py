@@ -23,6 +23,7 @@ import threading
 import time
 import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import socket as _socket
 from urllib.parse import urlparse, parse_qs
 
 DASHBOARD_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -53,7 +54,8 @@ VIDEO_STREAMS = [
     (8071, "右眼"),
     (8072, "左眼"),
     (8073, "深度图"),
-    (8093, "YOLO/手势"),
+    (8093, "YOLO检测"),
+    (8094, "手势识别"),
 ]
 
 
@@ -619,7 +621,18 @@ def main():
     print(f" 本机访问: http://127.0.0.1:{args.port}")
     print("=" * 50)
 
-    server = HTTPServer((args.host, args.port), DashboardHandler)
+    # 允许端口复用, 避免 "Address already in use"
+    class ReuseHTTPServer(HTTPServer):
+        allow_reuse_address = True
+
+    # 先杀旧进程
+    try:
+        subprocess.run(["pkill", "-f", "dashboard.py"], timeout=2)
+        time.sleep(0.5)
+    except Exception:
+        pass
+
+    server = ReuseHTTPServer((args.host, args.port), DashboardHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
