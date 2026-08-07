@@ -338,8 +338,20 @@ def main():
     class S(HTTPServer):
         allow_reuse_address = True
 
+    # 清理旧的 dashboard_lite 进程 (排除自己)
     try:
-        subprocess.run(["pkill", "-f", "dashboard_lite.py"], timeout=2)
+        my_pid = os.getpid()
+        result = subprocess.run(
+            ["pgrep", "-f", "dashboard_lite.py"],
+            capture_output=True, text=True, timeout=2
+        )
+        for pid_str in result.stdout.strip().split("\n"):
+            pid_str = pid_str.strip()
+            if pid_str and pid_str != str(my_pid):
+                try:
+                    os.kill(int(pid_str), 9)
+                except Exception:
+                    pass
         time.sleep(0.3)
     except Exception:
         pass
