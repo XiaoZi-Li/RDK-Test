@@ -122,15 +122,15 @@ start_all() {
     cd - > /dev/null
     sleep 2
 
-    # ---------- 7. 语音控制 ----------
-    echo "[START] 7/7 启动语音控制..."
-    python3 /app/puppy_ws/tools/voice_control_standalone.py \
+    # ---------- 7. 语音助手（云端 LLM 对话 + 意图识别控制） ----------
+    echo "[START] 7/7 启动语音助手（DeepSeek LLM）..."
+    python3 "$INTEGRATED_DIR/voice_assistant.py" \
         --mic plughw:1,0 \
         --speaker plughw:0,0 \
         --gain 10 \
-        --aggressiveness 2 \
+        --vad-aggressiveness 2 \
         --silence 1.0 \
-        > "$LOG_DIR/voice_control.log" 2>&1 &
+        > "$LOG_DIR/voice_assistant.log" 2>&1 &
     record_pid "voice" $!
 
     echo ""
@@ -143,7 +143,7 @@ start_all() {
     echo "  避障日志        $LOG_DIR/start_avoidance.log"
     echo "  YOLO日志        $LOG_DIR/yolo_display.log"
     echo "  手势日志        $LOG_DIR/gesture_control.log"
-    echo "  语音日志        $LOG_DIR/voice_control.log"
+    echo "  语音助手日志    $LOG_DIR/voice_assistant.log"
     echo "------------------------------------------------------------"
     echo "  查看状态: $0 status"
     echo "  停止全部: $0 stop"
@@ -158,7 +158,7 @@ stop_all() {
 
     # 1. 停止独立进程
     echo "[STOP] 1/4 停止语音/手势/YOLO/仲裁器..."
-    pkill -f 'voice_control_standalone.py' 2>/dev/null || true
+    pkill -f 'voice_assistant.py' 2>/dev/null || true
     pkill -f 'gesture_control.py' 2>/dev/null || true
     pkill -f 'yolo_display.py' 2>/dev/null || true
     pkill -f 'motion_arbiter.py' 2>/dev/null || true
@@ -206,7 +206,7 @@ status_all() {
     check_proc "双目避障" "stereo_avoidance_node.py"
     check_proc "YOLO 显示" "yolo_display.py"
     check_proc "手势控制" "gesture_control.py"
-    check_proc "语音控制" "voice_control_standalone.py"
+    check_proc "语音助手 (LLM)" "voice_assistant.py"
 
     if ss -ulnp 2>/dev/null | grep -q ":$ARBITER_LISTEN_PORT "; then
         echo "✅ UDP $ARBITER_LISTEN_PORT (仲裁器)"
