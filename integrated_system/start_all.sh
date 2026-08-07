@@ -126,7 +126,7 @@ start_all() {
     sleep 2
 
     # ---------- 7. 语音助手（云端 LLM 对话 + 意图识别控制） ----------
-    echo "[START] 7/7 启动语音助手（DeepSeek LLM）..."
+    echo "[START] 7/8 启动语音助手（DeepSeek LLM）..."
     python3 "$INTEGRATED_DIR/voice_assistant.py" \
         --mic plughw:1,0 \
         --speaker plughw:0,0 \
@@ -136,9 +136,21 @@ start_all() {
         > "$LOG_DIR/voice_assistant.log" 2>&1 &
     record_pid "voice" $!
 
+    # ---------- 8. Web 监控面板 ----------
+    echo "[START] 8/8 启动 Web 监控面板 (http://0.0.0.0:8080)..."
+    python3 "$INTEGRATED_DIR/dashboard.py" \
+        --host 0.0.0.0 --port 8080 \
+        > "$LOG_DIR/dashboard.log" 2>&1 &
+    record_pid "dashboard" $!
+
+    BOARD_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+    [ -z "$BOARD_IP" ] && BOARD_IP="<板端IP>"
+
     echo ""
     echo "============================================================"
     echo " 全部组件已启动完成"
+    echo "------------------------------------------------------------"
+    echo "  监控面板        http://$BOARD_IP:8080"
     echo "------------------------------------------------------------"
     echo "  仲裁器日志      $LOG_DIR/arbiter.log"
     echo "  双目/AI 日志    $LOG_DIR/start_v2.log"
@@ -147,9 +159,12 @@ start_all() {
     echo "  YOLO日志        $LOG_DIR/yolo_display.log"
     echo "  手势日志        $LOG_DIR/gesture_control.log"
     echo "  语音助手日志    $LOG_DIR/voice_assistant.log"
+    echo "  监控面板日志    $LOG_DIR/dashboard.log"
     echo "------------------------------------------------------------"
     echo "  查看状态: $0 status"
     echo "  停止全部: $0 stop"
+    echo "  重启双目: $0 restart-stereo"
+    echo "  重启中枢: $0 restart-robot"
     echo "============================================================"
 }
 
@@ -165,6 +180,7 @@ stop_all() {
     pkill -f 'gesture_control.py' 2>/dev/null || true
     pkill -f 'yolo_display.py' 2>/dev/null || true
     pkill -f 'motion_arbiter.py' 2>/dev/null || true
+    pkill -f 'dashboard.py' 2>/dev/null || true
 
     # 2. 停止避障
     echo "[STOP] 2/4 停止避障..."
@@ -210,6 +226,7 @@ status_all() {
     check_proc "YOLO 显示" "yolo_display.py"
     check_proc "手势控制" "gesture_control.py"
     check_proc "语音助手 (LLM)" "voice_assistant.py"
+    check_proc "监控面板" "dashboard.py"
 
     if ss -ulnp 2>/dev/null | grep -q ":$ARBITER_LISTEN_PORT "; then
         echo "✅ UDP $ARBITER_LISTEN_PORT (仲裁器)"
