@@ -4,19 +4,19 @@
 # 与完整版的区别 (省 CPU/带宽/延迟):
 #   - 双目: start_v2_lite.sh (无 codec/websocket/AI叠加/MJPEG桥)
 #   - 手势: gesture_control_lite.py (默认不推流, 限 10fps)
-#   - 面板: dashboard_lite.py :8090 (无视频流)
+#   - 面板: dashboard_lite.py :8082 (无视频流, 8090 留给完整版双目页面)
 #   - 避障/语音/仲裁/sit.py 与完整版完全一致
 #
 # 运动控制优先级: 避障 > 语音 > 手势
 #
 # 用法:
-#   ./start_all_lite.sh start          # 轻量版一键启动 (面板 :8090)
+#   ./start_all_lite.sh start          # 轻量版一键启动 (面板 :8082)
 #   ./start_all_lite.sh stop           # 停止全部
 #   ./start_all_lite.sh status         # 查看各组件状态
 #   ./start_all_lite.sh restart        # 重启
 #   ./start_all_lite.sh restart-stereo # 单独重启双目深度
 #   ./start_all_lite.sh restart-robot  # 单独重启运动中枢
-#   ./start_all_lite.sh dashboard      # 单独启动轻量面板 (8090)
+#   ./start_all_lite.sh dashboard      # 单独启动轻量面板 (8082)
 # ============================================================================
 
 set -u
@@ -156,7 +156,10 @@ start_all() {
     sleep 2
 
     # ---------- 6. 语音助手（云端 LLM 对话 + 意图识别控制） ----------
-    echo "[START] 6/7 启动语音助手（DeepSeek LLM）..."
+    # 喇叭音量: 默认降到 10% (夜间防吵), 白天可用 SPEAKER_VOLUME=60 ./start_all_lite.sh start 覆盖
+    echo "[START] 6/7 设置喇叭音量 ${SPEAKER_VOLUME:-10}% 并启动语音助手（DeepSeek LLM）..."
+    amixer -c 0 sset PCM unmute >/dev/null 2>&1 || true
+    amixer -c 0 sset PCM "${SPEAKER_VOLUME:-10}%" >/dev/null 2>&1 || true
     voice_pid=$(launch_bg "$LOG_DIR/voice_assistant.log" python3 "$INTEGRATED_DIR/voice_assistant.py" \
         --mic plughw:1,0 \
         --speaker plughw:0,0 \
@@ -165,9 +168,9 @@ start_all() {
         --silence 1.0)
 
     # ---------- 7. 轻量 Web 监控面板 (无视频流) ----------
-    echo "[START] 7/7 启动轻量监控面板 (http://0.0.0.0:8090, 无视频流)..."
+    echo "[START] 7/7 启动轻量监控面板 (http://0.0.0.0:8082, 无视频流)..."
     dashboard_pid=$(launch_bg "$LOG_DIR/dashboard_lite.log" python3 -u "$INTEGRATED_DIR/dashboard_lite.py" \
-        --host 0.0.0.0 --port 8090)
+        --host 0.0.0.0 --port 8082)
     record_pid "dashboard" "$dashboard_pid"
     sleep 2
 
@@ -178,7 +181,7 @@ start_all() {
     echo "============================================================"
     echo " 轻量版全部组件已启动完成"
     echo "------------------------------------------------------------"
-    echo "  监控面板(轻量)  http://$BOARD_IP:8090"
+    echo "  监控面板(轻量)  http://$BOARD_IP:8082"
     echo "------------------------------------------------------------"
     echo "  仲裁器日志      $LOG_DIR/arbiter.log"
     echo "  双目日志        $LOG_DIR/start_v2_lite.log"
@@ -290,7 +293,7 @@ start_dashboard() {
     echo "[DASHBOARD] 启动轻量 Web 监控面板 (无视频流)..."
     local pid
     pid=$(launch_bg "$LOG_DIR/dashboard_lite.log" python3 -u "$INTEGRATED_DIR/dashboard_lite.py" \
-        --host 0.0.0.0 --port 8090)
+        --host 0.0.0.0 --port 8082)
     sleep 2
     local board_ip
     board_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -298,7 +301,7 @@ start_dashboard() {
     if kill -0 "$pid" 2>/dev/null; then
         echo "============================================================"
         echo " 轻量监控面板已启动 (PID=$pid)"
-        echo " 访问: http://$board_ip:8090"
+        echo " 访问: http://$board_ip:8082"
         echo " 日志: $LOG_DIR/dashboard_lite.log"
         echo "============================================================"
     else

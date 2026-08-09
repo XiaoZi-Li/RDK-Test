@@ -15,7 +15,6 @@
   .cell { position: relative; background: #000; border-radius: 4px; overflow: hidden; aspect-ratio: 16/10; }
   .cell.wide { grid-column: span 2; aspect-ratio: 1280/352; }
   .cell img { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
-  .cell.flip img { transform: rotate(180deg); }
   .cell .label { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,.65); color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 500; z-index: 2; }
   .cell .badge { position: absolute; top: 8px; right: 8px; background: rgba(239,68,68,.85); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; z-index: 2; }
   footer { padding: 10px 18px; color: #6c7180; font-size: 11px; text-align: center; border-top: 1px solid #2a2f3a; }
@@ -32,19 +31,19 @@
 
 <div class="grid">
 
-  <div class="cell flip">
-    <span class="label">左眼 · 1280×1088 · <code>:8071</code></span>
+  <div class="cell">
+    <span class="label">右眼 · 1280×1088 · <code>:8071</code></span>
     <span class="badge">● LIVE</span>
-    <img src="http://192.168.1.4:8071" alt="left eye">
+    <img src="http://192.168.1.4:8071" alt="right eye">
   </div>
 
-  <div class="cell flip">
-    <span class="label">右眼 · 1280×1088 · <code>:8072</code></span>
+  <div class="cell">
+    <span class="label">左眼 · 1280×1088 · <code>:8072</code></span>
     <span class="badge">● LIVE</span>
-    <img src="http://192.168.1.4:8072" alt="right eye">
+    <img src="http://192.168.1.4:8072" alt="left eye">
   </div>
 
-  <div class="cell wide flip">
+  <div class="cell wide">
     <span class="label">双目深度图 · 640×352 (单眼) · <code>:8073</code> · BPU stereonet</span>
     <span class="badge">● LIVE</span>
     <img src="http://192.168.1.4:8073" alt="depth visual">
@@ -54,9 +53,11 @@
 
 <footer>
   本页：<code>http://192.168.1.4:8090/view.html</code>　|
-  单独访问：<a href="http://192.168.1.4:8071">8071 左眼</a> · <a href="http://192.168.1.4:8072">8072 右眼</a> · <a href="http://192.168.1.4:8073">8073 深度图</a>
+  单独访问：<a href="http://192.168.1.4:8071">8071 右眼</a> · <a href="http://192.168.1.4:8072">8072 左眼</a> · <a href="http://192.168.1.4:8073">8073 深度图</a>
   <br>
-  ← AI pipeline: mono2d 10fps · face_landmarks / hand_gesture 等待目标 · stereonet ~6 fps
+  ➡ <a href="http://192.168.1.4:8090/view_status.html"><b>避障监控页 view_status.html</b>（深度图 + 障碍物左/中/右方位实时显示）</a>
+  <br>
+  图像方向由 mjpeg_bridge 在推流层修正（--vflip --hflip），页面无需再翻转。
 </footer>
 
 </body>

@@ -9,7 +9,7 @@
   - 页面更小, 刷新更快
 
 用法:
-  python3 dashboard_lite.py                 # 默认 8090 端口
+  python3 dashboard_lite.py                 # 默认 8082 端口 (8090 留给完整版双目 view.html/view_status.html)
   python3 dashboard_lite.py --port 8888
 """
 import argparse
@@ -229,7 +229,7 @@ body{font-family:-apple-system,'Microsoft YaHei',sans-serif;background:#0d1117;c
   <div class="card"><h2>组件状态</h2><div id="comp"></div></div>
   <div class="card"><h2>UDP 端口</h2><div id="udp"></div></div>
   <div class="card"><h2>视频流</h2>
-    <div class="vid-note">轻量模式：所有视频流已关闭（不起 codec / websocket / MJPEG 桥 / 手势推流），以降低 CPU 和延迟。<br>需要画面请用完整版面板 <b>:8081</b>（需完整版启动）。</div>
+    <div class="vid-note">轻量模式：所有视频流已关闭（不起 codec / websocket / MJPEG 桥 / 手势推流），以降低 CPU 和延迟。<br>需要画面请用完整版启动，然后访问深度页 <b>:8090/view_status.html</b>（含障碍物方位）或完整面板 <b>:8081</b>。</div>
   </div>
   <div class="card">
     <h2>系统控制</h2>
@@ -443,7 +443,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description="轻量版监控面板")
     parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8090)
+    parser.add_argument("--port", type=int, default=8082)
     args = parser.parse_args()
 
     # 用 ThreadingHTTPServer: LLM 对话请求耗时数秒, 单线程会卡住状态刷新

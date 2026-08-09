@@ -167,7 +167,10 @@ start_all() {
     sleep 2
 
     # ---------- 6. 语音助手（云端 LLM 对话 + 意图识别控制） ----------
-    echo "[START] 6/7 启动语音助手（DeepSeek LLM）..."
+    # 喇叭音量: 默认降到 10% (夜间防吵), 白天可用 SPEAKER_VOLUME=60 ./start_all.sh start 覆盖
+    echo "[START] 6/7 设置喇叭音量 ${SPEAKER_VOLUME:-10}% 并启动语音助手（DeepSeek LLM）..."
+    amixer -c 0 sset PCM unmute >/dev/null 2>&1 || true
+    amixer -c 0 sset PCM "${SPEAKER_VOLUME:-10}%" >/dev/null 2>&1 || true
     voice_pid=$(launch_bg "$LOG_DIR/voice_assistant.log" python3 "$INTEGRATED_DIR/voice_assistant.py" \
         --mic plughw:1,0 \
         --speaker plughw:0,0 \
