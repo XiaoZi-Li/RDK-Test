@@ -21,7 +21,8 @@
   "motion": {
     "arbiter_ip": "127.0.0.1",
     "arbiter_port": 5005,
-    "move_duration_sec": 2.5
+    "move_duration_sec": 2.5,
+    "discrete_wait_sec": 2.0
   },
   "asr": {
     "vosk_model_path": "/app/puppy_ws/models/vosk-model-small-cn-0.22"

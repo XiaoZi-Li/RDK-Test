@@ -330,7 +330,7 @@ class ActionScheduler:
 # 主程序: USB 摄像头 + MediaPipe Hands + 动作调度
 # ============================================================
 # ============================================================
-# HTTP MJPEG 推流 (8093端口) - 供浏览器实时查看手势画面
+# HTTP MJPEG 推流 (默认 8094 端口) - 供浏览器实时查看手势画面
 # ============================================================
 class FrameBuffer:
     """线程安全的最新帧缓冲, 供推流线程读取"""
@@ -461,7 +461,7 @@ def main():
     parser.add_argument('--udp-port', type=int, default=5005, help='sit.py 的 UDP 端口')
     parser.add_argument('--max-hands', type=int, default=2, help='最大检测手数 (1或2)')
     parser.add_argument('--show', action='store_true', help='显示本地窗口 (需X11)')
-    parser.add_argument('--port', type=int, default=8093, help='HTTP MJPEG 推流端口')
+    parser.add_argument('--port', type=int, default=8094, help='HTTP MJPEG 推流端口')
     parser.add_argument('--hold-sec', type=float, default=0.5,
                         help='手势消失多少秒后停车')
     parser.add_argument('--lock-sec', type=float, default=2.5,

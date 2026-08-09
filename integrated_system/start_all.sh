@@ -19,6 +19,23 @@ INTEGRATED_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="/tmp/integrated_system"
 PID_FILE="$LOG_DIR/integrated.pids"
 
+# 清理 LD_LIBRARY_PATH 中 Trae 沙箱注入的路径
+# (trae-cn-server 的 libstdc++.so.6 版本太旧, 会导致 libdnn.so/rclpy 加载失败)
+if echo "$LD_LIBRARY_PATH" | grep -q "trae-cn-server"; then
+    export LD_LIBRARY_PATH=$(echo "$LD_LIBRARY_PATH" | tr ':' '\n' | grep -v "trae-cn-server" | tr '\n' ':' | sed 's/:$//')
+fi
+
+# ROS 日志目录: 沙箱/受限环境下 /root/.ros 实际不可写,
+# 会导致 ros2 launch 和 rclpy.init() 全部 Permission denied, 用 touch 实测后回落 /tmp
+_ros_log_base="${ROS_LOG_DIR:-${ROS_HOME:-$HOME/.ros}/log}"
+if ! (mkdir -p "$_ros_log_base" 2>/dev/null && touch "$_ros_log_base/.wtest" 2>/dev/null); then
+    export ROS_LOG_DIR="/tmp/ros_log"
+    mkdir -p "$ROS_LOG_DIR" 2>/dev/null
+else
+    rm -f "$_ros_log_base/.wtest" 2>/dev/null
+fi
+unset _ros_log_base
+
 # 集成模式端口配置
 export SIT_UDP_PORT="${SIT_UDP_PORT:-5006}"
 export ARBITER_LISTEN_PORT="${ARBITER_LISTEN_PORT:-5005}"
@@ -28,10 +45,13 @@ export ARBITER_SIT_IP="${ARBITER_SIT_IP:-127.0.0.1}"
 mkdir -p "$LOG_DIR"
 
 # 后台启动函数: 用 nohup + setsid 让进程脱离终端, 避免被 IDE 杀掉
+# 同时清理 LD_LIBRARY_PATH 中的 trae-cn-server 路径, 防止 libstdc++ 版本冲突
 launch_bg() {
     local logfile=$1
     shift
-    nohup setsid "$@" > "$logfile" 2>&1 &
+    local clean_llp
+    clean_llp=$(echo "$LD_LIBRARY_PATH" | tr ':' '\n' | grep -v "trae-cn-server" | tr '\n' ':' | sed 's/:$//')
+    LD_LIBRARY_PATH="$clean_llp" nohup setsid "$@" > "$logfile" 2>&1 &
     echo $!
 }
 
@@ -136,26 +156,18 @@ start_all() {
     /app/gs130w_stereo/scripts/start_avoidance.sh start > "$LOG_DIR/start_avoidance.log" 2>&1
     sleep 3
 
-    # ---------- 5. YOLO 显示 (独占 USB 摄像头) ----------
-    echo "[START] 5/8 启动 YOLO 显示 (http://<ip>:8093)..."
-    cd /app/standalone
-    yolo_pid=$(launch_bg "$LOG_DIR/yolo_display.log" python3 yolo_display.py \
-        --device /dev/video0 --port 8093)
-    cd - > /dev/null
-    sleep 3
-
-    # ---------- 6. 手势控制 (从 YOLO MJPEG 流读取, 避免摄像头冲突) ----------
-    echo "[START] 6/8 启动手势控制 (从 YOLO 流读取, http://<ip>:8094)..."
+    # ---------- 5. 手势控制 (独占 USB 摄像头 /dev/video0, 无 YOLO) ----------
+    echo "[START] 5/7 启动手势控制 (MediaPipe, http://<ip>:8094)..."
     cd /app/standalone
     gesture_pid=$(launch_bg "$LOG_DIR/gesture_control.log" python3 gesture_control.py \
-        --device http://127.0.0.1:8093/stream \
+        --device /dev/video0 \
         --port 8094 \
         --udp-port 5005)
     cd - > /dev/null
     sleep 2
 
-    # ---------- 7. 语音助手（云端 LLM 对话 + 意图识别控制） ----------
-    echo "[START] 7/8 启动语音助手（DeepSeek LLM）..."
+    # ---------- 6. 语音助手（云端 LLM 对话 + 意图识别控制） ----------
+    echo "[START] 6/7 启动语音助手（DeepSeek LLM）..."
     voice_pid=$(launch_bg "$LOG_DIR/voice_assistant.log" python3 "$INTEGRATED_DIR/voice_assistant.py" \
         --mic plughw:1,0 \
         --speaker plughw:0,0 \
@@ -163,8 +175,8 @@ start_all() {
         --vad-aggressiveness 2 \
         --silence 1.0)
 
-    # ---------- 8. Web 监控面板 ----------
-    echo "[START] 8/8 启动 Web 监控面板 (http://0.0.0.0:8081)..."
+    # ---------- 7. Web 监控面板 ----------
+    echo "[START] 7/7 启动 Web 监控面板 (http://0.0.0.0:8081)..."
     dashboard_pid=$(launch_bg "$LOG_DIR/dashboard.log" python3 -u "$INTEGRATED_DIR/dashboard.py" \
         --host 0.0.0.0 --port 8081)
     record_pid "dashboard" "$dashboard_pid"
@@ -177,13 +189,12 @@ start_all() {
     echo "============================================================"
     echo " 全部组件已启动完成"
     echo "------------------------------------------------------------"
-    echo "  监控面板        http://$BOARD_IP:8080"
+    echo "  监控面板        http://$BOARD_IP:8081"
     echo "------------------------------------------------------------"
     echo "  仲裁器日志      $LOG_DIR/arbiter.log"
     echo "  双目/AI 日志    $LOG_DIR/start_v2.log"
     echo "  机器人日志      $LOG_DIR/robot_minimal.log"
     echo "  避障日志        $LOG_DIR/start_avoidance.log"
-    echo "  YOLO日志        $LOG_DIR/yolo_display.log"
     echo "  手势日志        $LOG_DIR/gesture_control.log"
     echo "  语音助手日志    $LOG_DIR/voice_assistant.log"
     echo "  监控面板日志    $LOG_DIR/dashboard.log"
@@ -202,7 +213,7 @@ stop_all() {
     echo "============================================================"
 
     # 1. 停止独立进程
-    echo "[STOP] 1/4 停止语音/手势/YOLO/仲裁器..."
+    echo "[STOP] 1/4 停止语音/手势/仲裁器/面板..."
     safe_kill 'voice_assistant.py'
     safe_kill 'gesture_control.py'
     safe_kill 'yolo_display.py'
@@ -240,7 +251,6 @@ status_all() {
     check_proc "WebSocket 桥" "ws_bridge_node"
     check_proc "ROS/UDP 桥" "ros_udp_bridge"
     check_proc "双目避障" "stereo_avoidance_node.py"
-    check_proc "YOLO 显示" "yolo_display.py"
     check_proc "手势控制" "gesture_control.py"
     check_proc "语音助手 (LLM)" "voice_assistant.py"
     check_proc "监控面板" "dashboard.py"

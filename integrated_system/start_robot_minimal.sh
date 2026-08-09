@@ -26,14 +26,23 @@ LOG_DIR="/tmp/integrated_system"
 mkdir -p "$LOG_DIR"
 PID_FILE="$LOG_DIR/robot_minimal.pids"
 
+# 清理 LD_LIBRARY_PATH 中 Trae 沙箱注入的路径
+# (trae-cn-server 的 libstdc++.so.6 版本太旧, 会导致 rclpy 加载失败)
+if echo "$LD_LIBRARY_PATH" | grep -q "trae-cn-server"; then
+    export LD_LIBRARY_PATH=$(echo "$LD_LIBRARY_PATH" | tr ':' '\n' | grep -v "trae-cn-server" | tr '\n' ':' | sed 's/:$//')
+fi
+
 # 集成模式: sit.py 绑 5006, 仲裁器在 5005
 export SIT_UDP_PORT="${SIT_UDP_PORT:-5006}"
 
 # 后台启动函数: 用 nohup 让进程脱离终端, 避免被父 shell 退出杀掉
+# 同时清理 LD_LIBRARY_PATH 中的 trae-cn-server 路径, 防止 libstdc++ 版本冲突
 launch_bg() {
     local logfile=$1
     shift
-    nohup "$@" > "$logfile" 2>&1 &
+    local clean_llp
+    clean_llp=$(echo "$LD_LIBRARY_PATH" | tr ':' '\n' | grep -v "trae-cn-server" | tr '\n' ':' | sed 's/:$//')
+    LD_LIBRARY_PATH="$clean_llp" nohup "$@" > "$logfile" 2>&1 &
     echo $!
 }
 

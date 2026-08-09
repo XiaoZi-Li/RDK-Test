@@ -66,6 +66,7 @@ import audioop
 FAST_COMMANDS = {
     '坐下': 'sit', '坐下来': 'sit', '坐下吧': 'sit',
     '站立': 'stand', '站起来': 'stand', '起来': 'stand',
+    '趴下': 'crouch', '爬下': 'crouch', '卧倒': 'crouch',
     '停下': 'stop', '停止': 'stop', '别动': 'stop', '不要动': 'stop', '停': 'stop',
     '前进': 'forward', '向前走': 'forward', '往前走': 'forward', '直走': 'forward',
     '后退': 'backward', '向后走': 'backward', '倒车': 'backward',
@@ -78,10 +79,44 @@ CONTINUOUS_ACTIONS = {'forward', 'backward', 'turn_left', 'turn_right'}
 
 # sit.py 动作映射（语音 LLM action → sit.py action）
 SIT_ACTION_MAP = {
-    'sit': 'sit', 'stand': 'stand', 'stop': 'stop',
-    'forward': 'walk', 'backward': 'walk',  # sit.py 用 walk 表示前进
+    'sit': 'sit', 'stand': 'stand', 'stop': 'stop', 'crouch': 'crouch',
+    'forward': 'walk',          # sit.py 用 walk 表示前进
+    'backward': 'backward',     # sit.py 原生支持 backward
     'turn_left': 'turn_left', 'turn_right': 'turn_right',
 }
+
+# 动作中文名（用于序列播报）
+ACTION_NAMES = {
+    'sit': '坐下', 'stand': '站起来', 'stop': '停下', 'crouch': '趴下',
+    'forward': '前进', 'backward': '后退',
+    'turn_left': '左转', 'turn_right': '右转',
+}
+
+# 按词长降序，保证最长匹配优先（"站起来"先于"起来"，"坐下来"先于"坐下"）
+_FAST_PHRASES = sorted(FAST_COMMANDS.items(), key=lambda kv: len(kv[0]), reverse=True)
+
+
+def extract_action_sequence(text: str) -> list:
+    """按出现顺序从文本中提取动作序列（不重叠最长匹配）
+
+    例: "先站起来然后再坐下" → ['stand', 'sit']
+        "前进再左转"         → ['forward', 'turn_left']
+    """
+    result = []
+    i, n = 0, len(text)
+    while i < n:
+        matched = False
+        for phrase, cmd in _FAST_PHRASES:
+            if text.startswith(phrase, i):
+                # 相邻相同动作去重（如"站起来站起来"只执行一次）
+                if not result or result[-1] != cmd:
+                    result.append(cmd)
+                i += len(phrase)
+                matched = True
+                break
+        if not matched:
+            i += 1
+    return result
 
 
 # ============ TTS 后端 ============
@@ -336,23 +371,53 @@ def wav_to_text(model: Model, wav_path: str) -> str:
 
 
 # ============ 运动控制 ============
-def send_motion_action(action: str, arbiter_ip: str, arbiter_port: int,
-                       move_duration: float = 2.5):
-    """发送运动指令到仲裁器
+def execute_action_sequence(actions: list, arbiter_ip: str, arbiter_port: int,
+                            move_duration: float = 2.5,
+                            discrete_wait: float = 2.0,
+                            heartbeat: float = 0.4):
+    """按顺序执行动作序列，每个动作时长可控
 
-    action 来自 LLM: forward / backward / sit / stand / stop / turn_left / turn_right
+    actions: [{'action': 'forward', 'duration': 3.0}, ...]
+             duration 为 None 时用默认值（持续型=move_duration, 离散型=discrete_wait）
+
+    注意: 仲裁器语音通道 1s 无包会超时自动停车, 所以持续型动作
+    必须以 heartbeat 间隔心跳重发来保持通道存活, 否则会被截断成 1s。
     """
-    sit_action = SIT_ACTION_MAP.get(action, action)
+    for idx, item in enumerate(actions):
+        action = item['action']
+        duration = item.get('duration')
+        sit_action = SIT_ACTION_MAP.get(action, action)
+        is_last = (idx == len(actions) - 1)
 
-    # 离散动作：发一次
-    if sit_action in ('sit', 'stand', 'stop'):
-        _send_udp(arbiter_ip, arbiter_port, sit_action)
-        return
+        if action in CONTINUOUS_ACTIONS:
+            dur = duration if duration is not None else move_duration
+            dur = max(0.5, min(30.0, dur))
+            print(f'  [SEQ {idx+1}/{len(actions)}] {action} 持续 {dur:.1f}s')
+            _send_continuous(sit_action, arbiter_ip, arbiter_port, dur, heartbeat)
+        else:
+            print(f'  [SEQ {idx+1}/{len(actions)}] {action}')
+            _send_udp(arbiter_ip, arbiter_port, sit_action)
+            if not is_last:
+                # 离散动作之间留出执行时间; stop 只需短暂间隔
+                if action == 'stop':
+                    wait = 0.5
+                else:
+                    wait = duration if duration is not None else discrete_wait
+                    wait = max(0.0, min(30.0, wait))
+                time.sleep(wait)
 
-    # 持续动作：发动作 → 等待 → 发 stop
-    _send_udp(arbiter_ip, arbiter_port, sit_action)
-    time.sleep(move_duration)
-    _send_udp(arbiter_ip, arbiter_port, 'stop')
+
+def _send_continuous(sit_action: str, ip: str, port: int,
+                     duration: float, heartbeat: float = 0.4):
+    """持续动作: 心跳重发保持仲裁通道活跃, 到时后自动 stop"""
+    t_end = time.time() + duration
+    while True:
+        _send_udp(ip, port, sit_action)
+        remaining = t_end - time.time()
+        if remaining <= 0:
+            break
+        time.sleep(min(heartbeat, remaining))
+    _send_udp(ip, port, 'stop')
 
 
 def _send_udp(ip: str, port: int, action: str):
@@ -390,7 +455,9 @@ def main():
     parser.add_argument('--silence', type=float, default=None, help='静音结束秒数')
     parser.add_argument('--vad-aggressiveness', type=int, default=None)
     parser.add_argument('--volume', default=None, help='TTS 音量 dB')
-    parser.add_argument('--move-sec', type=float, default=None, help='持续动作秒数')
+    parser.add_argument('--move-sec', type=float, default=None, help='持续动作默认秒数')
+    parser.add_argument('--discrete-sec', type=float, default=None,
+                        help='序列中离散动作(sit/stand)后的等待秒数')
     args = parser.parse_args()
 
     # 加载配置
@@ -411,6 +478,7 @@ def main():
     vad_aggr = args.vad_aggressiveness or voice_cfg.get('vad_aggressiveness', 2)
     volume = args.volume or voice_cfg.get('tts_volume_db', '-5')
     move_sec = args.move_sec or motion_cfg.get('move_duration_sec', 2.5)
+    discrete_sec = args.discrete_sec or motion_cfg.get('discrete_wait_sec', 2.0)
     wakeup_enabled = not args.no_wakeup and voice_cfg.get('wakeup_enabled', True)
     wakeup_keywords = voice_cfg.get('wakeup_keywords', ['小狗'])
     vosk_model_path = asr_cfg.get('vosk_model_path', '/app/puppy_ws/models/vosk-model-small-cn-0.22')
@@ -430,7 +498,7 @@ def main():
     print(f' 唤醒词: {"关闭" if not wakeup_enabled else wakeup_keywords}')
     print(f' LLM:    {config["llm"].get("provider", "?")} / {config["llm"].get("model", "?")}')
     print(f' 控制:   UDP → {arbiter_ip}:{arbiter_port} (仲裁器)')
-    print(f' 移动持续: {move_sec} 秒')
+    print(f' 移动持续: {move_sec} 秒, 离散动作间隔: {discrete_sec} 秒')
     print('=' * 60)
 
     # 初始化 ASR
@@ -498,41 +566,35 @@ def main():
                     print('  → 未唤醒')
                     continue
 
-            # ===== 快速指令匹配（绕过 LLM，降低延迟） =====
-            fast_action = None
-            for phrase, cmd in FAST_COMMANDS.items():
-                if phrase in text:
-                    fast_action = cmd
-                    break
+            # ===== 快速指令匹配（按出现顺序提取动作序列，绕过 LLM 降低延迟） =====
+            fast_seq = extract_action_sequence(text)
 
-            if fast_action:
-                print(f'  → 快速指令: {fast_action}')
-                responses = {
-                    'sit': '好的，我坐下了',
-                    'stand': '好的，我站起来了',
-                    'stop': '好的，我停下了',
-                    'forward': '好的，我前进',
-                    'backward': '好的，我后退',
-                    'turn_left': '好的，我左转',
-                    'turn_right': '好的，我右转',
-                }
-                reply_text = responses.get(fast_action, '好的')
-
-                is_continuous = fast_action in CONTINUOUS_ACTIONS
-                if is_continuous:
-                    if tts:
-                        tts.speak(reply_text, speaker, volume)
-                    send_motion_action(fast_action, arbiter_ip, arbiter_port, move_sec)
+            if fast_seq:
+                names = [ACTION_NAMES.get(a, a) for a in fast_seq]
+                print(f'  → 快速指令序列: {fast_seq}')
+                if len(names) == 1:
+                    reply_text = f'好的，我{names[0]}了'
                 else:
-                    send_motion_action(fast_action, arbiter_ip, arbiter_port, move_sec)
+                    reply_text = '好的，我先' + '，再'.join(names)
+
+                actions = [{'action': a, 'duration': None} for a in fast_seq]
+                # 单个离散动作: 先动后说（响应更快）; 其他情况: 先说后动
+                if len(fast_seq) == 1 and fast_seq[0] not in CONTINUOUS_ACTIONS:
+                    execute_action_sequence(actions, arbiter_ip, arbiter_port,
+                                            move_sec, discrete_sec)
                     if tts:
                         tts.speak(reply_text, speaker, volume)
+                else:
+                    if tts:
+                        tts.speak(reply_text, speaker, volume)
+                    execute_action_sequence(actions, arbiter_ip, arbiter_port,
+                                            move_sec, discrete_sec)
                 continue
 
             # ===== LLM 对话 + 意图识别 =====
             print('  → 调用 LLM...')
             try:
-                reply, action = llm.chat(text)
+                reply, actions = llm.chat(text)
             except Exception as e:
                 print(f'  [LLM] 错误: {e}')
                 if tts:
@@ -540,21 +602,17 @@ def main():
                 continue
 
             print(f'  LLM回复: {reply}')
-            if action:
-                print(f'  LLM动作: {action}')
+            if actions:
+                print(f'  LLM动作序列: {actions}')
 
             # TTS 播报
             if tts:
                 tts.speak(reply, speaker, volume)
 
-            # 执行运动控制
-            if action and action in SIT_ACTION_MAP:
-                is_continuous = action in CONTINUOUS_ACTIONS
-                if is_continuous:
-                    # 先说后动（TTS 已播报完）
-                    send_motion_action(action, arbiter_ip, arbiter_port, move_sec)
-                else:
-                    send_motion_action(action, arbiter_ip, arbiter_port, move_sec)
+            # 按顺序执行动作序列（每个动作时长由 LLM 指定, 缺省用默认值）
+            if actions:
+                execute_action_sequence(actions, arbiter_ip, arbiter_port,
+                                        move_sec, discrete_sec)
 
         except KeyboardInterrupt:
             print('\n再见！')

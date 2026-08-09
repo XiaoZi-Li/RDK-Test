@@ -8,6 +8,24 @@
 #   ./start_v2.sh logs [name]  查看某进程日志
 set -u
 
+# 清理 LD_LIBRARY_PATH 中 Trae 沙箱注入的路径
+# (trae-cn-server 的 libstdc++.so.6 版本太旧, 会导致 mipi_cam/libdnn 崩溃: 总线错误)
+if echo "${LD_LIBRARY_PATH:-}" | grep -q "trae-cn-server"; then
+    export LD_LIBRARY_PATH=$(echo "$LD_LIBRARY_PATH" | tr ':' '\n' | grep -v "trae-cn-server" | tr '\n' ':' | sed 's/:$//')
+fi
+
+# ROS 日志目录: 沙箱/受限环境下 /root/.ros 可能实际不可写(-w 测试不准),
+# 会导致 ros2 launch 和 rclpy.init() 全部 Permission denied.
+# 用 touch 实测, 不可写则回落到 /tmp/ros_log
+_ros_log_base="${ROS_LOG_DIR:-${ROS_HOME:-$HOME/.ros}/log}"
+if ! (mkdir -p "$_ros_log_base" 2>/dev/null && touch "$_ros_log_base/.wtest" 2>/dev/null); then
+    export ROS_LOG_DIR="/tmp/ros_log"
+    mkdir -p "$ROS_LOG_DIR" 2>/dev/null
+else
+    rm -f "$_ros_log_base/.wtest" 2>/dev/null
+fi
+unset _ros_log_base
+
 PROJECT_ROOT="/app/gs130w_stereo"
 TROS_SETUP="/opt/tros/humble/setup.bash"
 GDC_BIN="/root/multimedia_samples/vp_sensors/gdc_bin/sc132gs_1088X1280_gdc.bin"
@@ -57,11 +75,19 @@ stop_all() {
     pkill -f 'hobot_codec' 2>/dev/null
     pkill -f 'websocket' 2>/dev/null
     pkill -f 'mipi_cam' 2>/dev/null
+    # AI 模型节点二进制 (launch 被杀后子进程可能残留, 占用 BPU/DDS 导致下次启动异常)
+    pkill -f 'mono2d_body_detection' 2>/dev/null
+    pkill -f 'face_landmarks_detection' 2>/dev/null
+    pkill -f 'hand_lmk_detection' 2>/dev/null
+    pkill -f 'hand_gesture_detection' 2>/dev/null
+    pkill -f 'stereonet_model_node' 2>/dev/null
     sleep 1
     # 强杀端口占用
     fuser -k ${PORT_LEFT}/tcp ${PORT_RIGHT}/tcp ${PORT_DEPTH}/tcp ${PORT_HTTP}/tcp 2>/dev/null
     sleep 1
     # 清共享内存（rdk-x5-tros skill 提示）
+    # 注意: 不要删 sem.fastrtps_* 信号量文件! ros2 daemon 等长驻进程持有其映射,
+    #       删除后新建段状态不一致, 会导致 DDS 发现/订阅异常 (stereonet 收不到 camera_info)
     rm -f /dev/shm/fastrtps_* 2>/dev/null
     echo "[STOP] 完成"
 }
@@ -145,20 +171,23 @@ start_all() {
     sleep 3
 
     echo "[START] 4/7 mjpeg_bridge 左眼 :$PORT_LEFT ..."
+    # 摄像头物理安装旋转了180°: combined 图上半=右眼、下半=左眼, 且画面上下颠倒
+    # 显示层修正: 左眼=bottom + 180°翻转(vflip+hflip); 只动显示, 不动原始链路,
+    # stereonet/避障(stereo_avoidance_node 已按倒置深度做软件补偿)完全不受影响
     python3 "$PROJECT_ROOT/scripts/mjpeg_bridge.py" \
-        --port $PORT_LEFT --topic /image_combine_jpeg --region top \
+        --port $PORT_LEFT --topic /image_combine_jpeg --region bottom --vflip --hflip \
         > "$LOG_DIR/mjpeg_left.log" 2>&1 &
     echo $! >> "$PID_FILE"
 
     echo "[START] 5/7 mjpeg_bridge 右眼 :$PORT_RIGHT ..."
     python3 "$PROJECT_ROOT/scripts/mjpeg_bridge.py" \
-        --port $PORT_RIGHT --topic /image_combine_jpeg --region bottom \
+        --port $PORT_RIGHT --topic /image_combine_jpeg --region top --vflip --hflip \
         > "$LOG_DIR/mjpeg_right.log" 2>&1 &
     echo $! >> "$PID_FILE"
 
     echo "[START] 6/7 mjpeg_bridge 深度图 :$PORT_DEPTH ..."
     python3 "$PROJECT_ROOT/scripts/mjpeg_bridge.py" \
-        --port $PORT_DEPTH --topic /StereoNetNode/stereonet_visual_jpeg --region full \
+        --port $PORT_DEPTH --topic /StereoNetNode/stereonet_visual_jpeg --region full --vflip --hflip \
         > "$LOG_DIR/mjpeg_depth.log" 2>&1 &
     echo $! >> "$PID_FILE"
 

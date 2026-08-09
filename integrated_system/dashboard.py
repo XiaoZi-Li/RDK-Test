@@ -19,10 +19,11 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 import socket as _socket
 from urllib.parse import urlparse, parse_qs
 
@@ -38,7 +39,6 @@ COMPONENTS = [
     ("WebSocket 桥", "ws_bridge_node", "process"),
     ("ROS/UDP 桥", "ros_udp_bridge", "process"),
     ("双目避障", "stereo_avoidance_node.py", "process"),
-    ("YOLO 显示", "yolo_display.py", "process"),
     ("手势控制", "gesture_control.py", "process"),
     ("语音助手", "voice_assistant.py", "process"),
 ]
@@ -54,7 +54,6 @@ VIDEO_STREAMS = [
     (8071, "右眼"),
     (8072, "左眼"),
     (8073, "深度图"),
-    (8093, "YOLO检测"),
     (8094, "手势识别"),
 ]
 
@@ -159,6 +158,46 @@ def send_udp_action(ip: str, port: int, action: str, source: str = "dashboard"):
         return True, f"已发送: {action} → {ip}:{port}"
     except Exception as e:
         return False, str(e)
+
+
+# ============ LLM 对话控制 (网页文字版语音助手) ============
+_llm = None
+_llm_init_lock = threading.Lock()
+_llm_call_lock = threading.Lock()    # LlmDialogue.chat 非线程安全(历史记录), 串行调用
+_action_lock = threading.Lock()      # 动作序列串行执行, 前一组没做完就排队等
+_motion_cfg = {"arbiter_ip": "127.0.0.1", "arbiter_port": 5005,
+               "move_duration_sec": 2.5, "discrete_wait_sec": 2.0}
+
+
+def get_llm():
+    """延迟初始化 LLM 对话管理器 (复用 voice_assistant 的配置与动作执行逻辑)"""
+    global _llm
+    with _llm_init_lock:
+        if _llm is None:
+            if DASHBOARD_DIR not in sys.path:
+                sys.path.insert(0, DASHBOARD_DIR)
+            cfg_path = os.path.join(DASHBOARD_DIR, "config.json")
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            _motion_cfg.update(config.get("motion", {}))
+            from llm_dialogue import LlmDialogue
+            _llm = LlmDialogue(config)
+    return _llm
+
+
+def run_actions_bg(actions: list):
+    """后台线程执行动作序列, 与语音助手走同一仲裁通道 (source=voice)"""
+    def _run():
+        from voice_assistant import execute_action_sequence
+        with _action_lock:
+            execute_action_sequence(
+                actions,
+                _motion_cfg["arbiter_ip"],
+                int(_motion_cfg["arbiter_port"]),
+                move_duration=float(_motion_cfg["move_duration_sec"]),
+                discrete_wait=float(_motion_cfg["discrete_wait_sec"]),
+            )
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def run_script(script: str, args: str = "") -> tuple:
@@ -282,6 +321,34 @@ body {
 #refresh-indicator {
   font-size: 11px; color: #8b949e; margin-left: 8px;
 }
+/* LLM 对话框 */
+.chat-box {
+  background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+  padding: 10px; height: 260px; overflow-y: auto; margin-bottom: 8px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.chat-msg {
+  max-width: 85%; padding: 6px 10px; border-radius: 8px;
+  font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+}
+.chat-msg.user {
+  align-self: flex-end; background: #1a2a3a; color: #58a6ff;
+  border: 1px solid #264a6b;
+}
+.chat-msg.assistant {
+  align-self: flex-start; background: #21262d; color: #c9d1d9;
+  border: 1px solid #30363d;
+}
+.chat-msg .actions-tag {
+  display: block; margin-top: 4px; font-size: 11px; color: #3fb950;
+}
+.chat-input { display: flex; gap: 6px; }
+.chat-input input {
+  flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid #30363d;
+  background: #0d1117; color: #c9d1d9; font-size: 13px; outline: none;
+}
+.chat-input input:focus { border-color: #58a6ff; }
+.chat-hint { font-size: 11px; color: #8b949e; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -344,6 +411,19 @@ body {
       <div class="action-btn" onclick="sendAction('walk')">🚶 行走</div>
     </div>
     <div id="action-result" class="result-msg"></div>
+  </div>
+
+  <!-- LLM 对话控制 -->
+  <div class="card">
+    <h2>💬 大模型对话控制</h2>
+    <div class="chat-box" id="chat-box">
+      <div class="chat-msg assistant">你好，我是小狗。输入文字指令即可控制我，比如「先坐下再站起来」「前进两秒然后左转」。</div>
+    </div>
+    <div class="chat-input">
+      <input id="chat-text" type="text" placeholder="输入指令或聊天内容，回车发送..." autocomplete="off">
+      <button class="btn blue" id="chat-send" onclick="sendChat()">发送</button>
+    </div>
+    <div class="chat-hint">与语音助手共用同一个 DeepSeek 模型和动作执行通道（source=voice），支持多动作序列和时长控制</div>
   </div>
 
   <!-- 视频流 -->
@@ -472,6 +552,56 @@ function showResult(id, msg, type) {
   el.className = 'result-msg show ' + type;
 }
 
+// LLM 对话
+function appendChat(role, text) {
+  const box = document.getElementById('chat-box');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.textContent = text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-text');
+  const btn = document.getElementById('chat-send');
+  const text = input.value.trim();
+  if (!text) return;
+  appendChat('user', text);
+  input.value = '';
+  btn.disabled = true;
+  const thinking = appendChat('assistant', '思考中...');
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: text})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      thinking.textContent = data.reply || '(无回复)';
+      if (data.actions && data.actions.length) {
+        const tag = document.createElement('span');
+        tag.className = 'actions-tag';
+        tag.textContent = '⚡ 动作序列: ' + data.actions.map(a =>
+          a.action + (a.duration != null ? ' ' + a.duration + 's' : '')).join(' → ');
+        thinking.appendChild(tag);
+      }
+    } else {
+      thinking.textContent = '❌ ' + (data.error || '请求失败');
+    }
+  } catch(e) {
+    thinking.textContent = '❌ 网络错误: ' + e.message;
+  }
+  btn.disabled = false;
+  input.focus();
+}
+
+document.getElementById('chat-text').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') sendChat();
+});
+
 // 日志
 const LOG_FILES = [
   ['arbiter', '仲裁器'],
@@ -479,7 +609,6 @@ const LOG_FILES = [
   ['start_v2', '双目深度'],
   ['start_avoidance', '避障'],
   ['robot_minimal', '机器人'],
-  ['yolo_display', 'YOLO'],
   ['gesture_control', '手势'],
   ['voice_assistant', '语音助手'],
 ];
@@ -564,7 +693,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 "start_v2": f"{LOG_DIR}/start_v2.log",
                 "start_avoidance": f"{LOG_DIR}/start_avoidance.log",
                 "robot_minimal": f"{LOG_DIR}/robot_minimal.log",
-                "yolo_display": f"{LOG_DIR}/yolo_display.log",
                 "gesture_control": f"{LOG_DIR}/gesture_control.log",
                 "voice_assistant": f"{LOG_DIR}/voice_assistant.log",
             }
@@ -627,6 +755,34 @@ class DashboardHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({"ok": False, "error": str(e)})
 
+        elif path == "/api/chat":
+            # LLM 对话控制: {"text": "..."} → {"reply", "actions"}
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length) if content_length else b"{}"
+            try:
+                data = json.loads(body)
+                text = str(data.get("text", "")).strip()
+            except Exception:
+                self.send_json({"ok": False, "error": "请求体不是合法 JSON"}, 400)
+                return
+            if not text:
+                self.send_json({"ok": False, "error": "text 为空"}, 400)
+                return
+            try:
+                llm = get_llm()
+            except Exception as e:
+                self.send_json({"ok": False, "error": f"LLM 初始化失败: {e}"})
+                return
+            try:
+                with _llm_call_lock:
+                    reply, actions = llm.chat(text)
+            except Exception as e:
+                self.send_json({"ok": False, "error": f"LLM 调用失败: {e}"})
+                return
+            if actions:
+                run_actions_bg(actions)
+            self.send_json({"ok": True, "reply": reply, "actions": actions})
+
         else:
             self.send_error(404)
 
@@ -645,8 +801,10 @@ def main():
     print("=" * 50)
 
     # 允许端口复用, 避免 "Address already in use"
-    class ReuseHTTPServer(HTTPServer):
+    # 用 ThreadingHTTPServer: LLM 对话请求耗时数秒, 单线程会卡住状态刷新
+    class ReuseHTTPServer(ThreadingHTTPServer):
         allow_reuse_address = True
+        daemon_threads = True
 
     # 清理旧的 dashboard 进程 (排除自己, 排除 trae-sandbox)
     try:
