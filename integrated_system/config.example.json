@@ -26,5 +26,15 @@
   },
   "asr": {
     "vosk_model_path": "/app/puppy_ws/models/vosk-model-small-cn-0.22"
+  },
+  "vision": {
+    "enabled": true,
+    "provider": "siliconflow",
+    "api_key": "YOUR_SILICONFLOW_KEY_HERE",
+    "base_url": "https://api.siliconflow.cn/v1",
+    "model": "Pro/moonshotai/Kimi-K2.6",
+    "max_tokens": 256,
+    "snapshot_url": "http://127.0.0.1:8094/snapshot",
+    "timeout_sec": 30
   }
 }

@@ -25,9 +25,10 @@ import tempfile
 import time
 import wave
 
-# 把本目录加入 path 以导入 llm_dialogue
+# 把本目录加入 path 以导入 llm_dialogue / vision_assistant
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from llm_dialogue import LlmDialogue
+from vision_assistant import VisionClient, is_vision_query
 
 # ---------- Vosk ASR ----------
 try:
@@ -524,6 +525,18 @@ def main():
         return
     print('OK')
 
+    # 初始化视觉问答（可选, vision.enabled 控制）
+    vision = None
+    if config.get('vision', {}).get('enabled', False):
+        print('[VISION] 初始化视觉模型...', end=' ', flush=True)
+        try:
+            vision = VisionClient(config)
+            print('OK')
+        except Exception as e:
+            print(f'失败: {e} (视觉问答将不可用)')
+    else:
+        print('[VISION] 未启用 (config vision.enabled=false)')
+
     # 开场白
     if tts:
         tts.speak('你好，我是小狗。请说小狗唤醒我，然后就可以和我聊天了。',
@@ -589,6 +602,22 @@ def main():
                         tts.speak(reply_text, speaker, volume)
                     execute_action_sequence(actions, arbiter_ip, arbiter_port,
                                             move_sec, discrete_sec)
+                continue
+
+            # ===== 视觉问答（USB摄像头取帧 + VLM 描述，绕过 LLM） =====
+            if vision and is_vision_query(text):
+                print('  → 视觉问答')
+                if tts:
+                    tts.speak('好的，我看一下。', speaker, volume)
+                try:
+                    answer = vision.look(text)
+                    print(f'  VLM回答: {answer}')
+                    if tts:
+                        tts.speak(answer, speaker, volume)
+                except Exception as e:
+                    print(f'  [VISION] 错误: {e}')
+                    if tts:
+                        tts.speak('抱歉，我现在看不清，请稍后再试。', speaker, volume)
                 continue
 
             # ===== LLM 对话 + 意图识别 =====
