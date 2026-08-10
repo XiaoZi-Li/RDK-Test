@@ -38,21 +38,20 @@ TURN_X = 4.0
 TURN_YAW = 0.35
 
 # =========================================================
-# 步态参数 (2026-08-10 调优: 低抬腿 + 步频略快 + 速度不变 → 走得更稳、减少打滑)
-#   z_clearance: 抬腿高度 8 → 5   (抬腿低, 重心晃动小, 落爪轻不打滑)
-#   swing_time : 摆动相 0.25 → 0.22s, overlap_time: 0.15 → 0.12s
-#                (步态周期 0.40 → 0.34s, 步频 +~18%, 步幅变短更稳)
-#   速度目标 WALK_X=10.0 不变, 由步态引擎自动缩短步幅保持同速
+# 步态参数 (2026-08-11 恢复出厂值: 低抬腿+快步频方案实测步态异常, 回退)
+#   z_clearance: 抬腿高度 8mm
+#   swing_time : 摆动相 0.25s, overlap_time: 0.15s (步态周期 0.40s)
+#   速度目标 WALK_X=10.0
 # 现场微调: 环境变量 GAIT_Z_CLEARANCE / GAIT_SWING_TIME / GAIT_OVERLAP_TIME
 # =========================================================
-GAIT_OVERLAP_TIME = float(os.environ.get("GAIT_OVERLAP_TIME", "0.12"))
-GAIT_SWING_TIME = float(os.environ.get("GAIT_SWING_TIME", "0.22"))
+GAIT_OVERLAP_TIME = float(os.environ.get("GAIT_OVERLAP_TIME", "0.15"))
+GAIT_SWING_TIME = float(os.environ.get("GAIT_SWING_TIME", "0.25"))
 GAIT_CLEARANCE_TIME = float(os.environ.get("GAIT_CLEARANCE_TIME", "0.0"))
-GAIT_Z_CLEARANCE = float(os.environ.get("GAIT_Z_CLEARANCE", "5"))
+GAIT_Z_CLEARANCE = float(os.environ.get("GAIT_Z_CLEARANCE", "8"))
 
-print(f"🐾 步态参数: z_clearance={GAIT_Z_CLEARANCE} (原8), "
-      f"swing={GAIT_SWING_TIME}s (原0.25), overlap={GAIT_OVERLAP_TIME}s (原0.15), "
-      f"速度目标 WALK_X={WALK_X} 不变")
+print(f"🐾 步态参数: z_clearance={GAIT_Z_CLEARANCE}, "
+      f"swing={GAIT_SWING_TIME}s, overlap={GAIT_OVERLAP_TIME}s, "
+      f"速度目标 WALK_X={WALK_X}")
 
 # 当前控制量
 current_x = 0.0
