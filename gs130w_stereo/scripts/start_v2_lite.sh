@@ -134,6 +134,25 @@ start() {
 
     sleep 2
 
+    # 恢复 attach 消费者: stop_all 清了 /dev/shm/fastrtps_* 共享内存段,
+    # 活着的避障节点与新 stereonet shm 失配, 永远收不到新帧,
+    # 必须等 stereonet 就绪后重启 (立即重启会前置检查失败退出 → 避障死掉)
+    if [ -f /tmp/gs130w_v2/avoidance.pid ] \
+       && kill -0 "$(cat /tmp/gs130w_v2/avoidance.pid 2>/dev/null)" 2>/dev/null; then
+        echo "[RECOVER] 重启避障节点 (等 stereonet 就绪后重订阅)..."
+        nohup bash -c '
+            for i in $(seq 1 90); do
+                if ros2 topic list 2>/dev/null | grep -q stereonet; then
+                    break
+                fi
+                sleep 1
+            done
+            sleep 3
+            exec "$0" restart
+        ' "$PROJECT_ROOT/scripts/start_avoidance.sh" \
+            >> "$LOG_DIR/recover.log" 2>&1 &
+    fi
+
     echo ""
     echo "================================================"
     echo " GS130W 轻量版启动完成 (无视频流)"

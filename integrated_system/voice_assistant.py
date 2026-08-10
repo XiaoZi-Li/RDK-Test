@@ -22,6 +22,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import wave
 
@@ -555,6 +556,31 @@ def main():
         tts.speak(text, speaker, volume)
         if tts_settle_ms > 0:
             time.sleep(tts_settle_ms / 1000.0)
+
+    # ===== UDP 播报服务 (端口 5007) =====
+    # 供避障节点 (方位播报) 和 dashboard (聊天回答播报) 调用:
+    #   echo '{"speak":"正前方有障碍物"}' | nc -u -w1 127.0.0.1 5007
+    def tts_udp_server():
+        srv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            srv.bind(('0.0.0.0', 5007))
+        except Exception as e:
+            print(f'[TTS-UDP] 端口 5007 绑定失败: {e} (播报服务不可用)')
+            return
+        print('[TTS-UDP] 播报服务已启动: UDP 5007')
+        while True:
+            try:
+                data, _ = srv.recvfrom(2048)
+                payload = json.loads(data.decode('utf-8', errors='ignore'))
+                text = str(payload.get('speak', '')).strip()
+                if text:
+                    print(f'[TTS-UDP] 播报: {text}')
+                    say(text)
+            except Exception:
+                continue
+
+    threading.Thread(target=tts_udp_server, daemon=True).start()
 
     # 开场白
     if tts:

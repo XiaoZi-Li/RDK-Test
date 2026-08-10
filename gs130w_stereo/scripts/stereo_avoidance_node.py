@@ -1,74 +1,92 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-双目深度避障节点 v2 (Stereo Depth Obstacle Avoidance Node v2)
+双目深度避障节点 v4 (Stereo Depth Obstacle Avoidance Node v4)
 
-v2 改进 (相比 v1):
-  1. 深度图 180° 旋转修复 (mipi_rotation:=90 导致左右颠倒)
-  2. 默认使用 follow_control 模式 (解决离散指令走走停停卡顿)
-  3. IMU 角速度积分航向修正 (解决前进左倾)
-  4. 阈值调整 (触发距离缩小 ~15%)
-  5. 转向锁定 (避免障碍物边界左右抖动)
+v4 重构 (2026-08-11, 基于用户现场摆瓶调试反馈):
+  1. 【方向性躲避】左边障碍 → 右转; 右边障碍 → 左转; 正前障碍 →
+     停车+播报 → 后退 → 向空旷侧转。转向持续到障碍侧清空(非固定时序),
+     超时 4s 兜底回巡航。
+  2. 【占比判定】v3 用 15% 分位距离, 右侧地面/桌面小片误差(几个像素)就把
+     right 判定值抬到跟瓶子侧差不多 → 左右误判。v4 改为"近像素占比":
+     区域 dist<danger 的像素占比 > 3% 才算障碍, <1.5% 算清空(滞回防抖),
+     小片误差直接被占比淹没。
+  3. 【垂直带收窄】40%~80% → 40%~70%: 排除近处地面(显示方向底部)误差区,
+     保留人手持瓶子所在的中部高度。
+  4. 【被动纯监测】开关 off 时绝不发任何运动指令, 只发布状态 JSON
+     (界面看判定结果); on→off 切换瞬间若节点自己正在驱动运动则补发 stop。
+  5. 【巡航】on 时 IDLE 持续 forward, 障碍触发状态机, 清空自动回 IDLE 续走。
+
+========== 状态机 ==========
+  IDLE:       巡航模式持续前进; 障碍 → TURN_RIGHT/TURN_LEFT/STOP
+  TURN_RIGHT: 躲左障, 右转直到左+中清空 → IDLE; 超时→IDLE; 障碍换边→IDLE
+  TURN_LEFT:  躲右障, 镜像
+  STOP:       正前障碍停车 stop_sec (已播报) → BACK
+  BACK:       后退 back_sec → 向空旷侧 TURN
 
 ========== 数据源 ==========
-  深度 (自动检测, 优先级):
-    1. /StereoNetNode/stereonet_disp   视差图 (高值=近)
-    2. /StereoNetNode/stereonet_visual bgr8 颜色映射 (红=近)
-  IMU:
-    /ros_robot_controller/imu_raw  (angular_velocity.z 积分得航向)
+  深度 (优先级自动选择):
+    1. /StereoNetNode/stereonet_depth   深度图 mono16/32FC1 (mm, 小值=近)
+    2. /StereoNetNode/stereonet_visual  bgr8 颜色映射 (红=近, fallback)
 
-========== 运动指令 (UDP -> 127.0.0.1:5005 -> sit.py) ==========
-  follow_control 模式 (默认, 流畅): {"mode":"follow_control","forward":0.4,"turn":0.1}
-  离散模式 (use_follow_control:=false): forward/turn_left/turn_right/backward/stop
+========== 运动指令 (UDP -> 仲裁器 5005 -> sit.py 5006) ==========
+  离散指令: forward/backward/turn_left/turn_right/stop, source=stereo_avoid
+  避障优先级最高 (P0), 发指令时压制语音/手势/遥控
 
-========== 启动顺序 ==========
-  1. /app/gs130w_stereo/scripts/start_v2.sh start   (视觉 + stereonet)
-  2. /app/start_robot.sh start                        (sit.py + IMU)
-  3. /app/gs130w_stereo/scripts/start_avoidance.sh start
+启动:
+  /app/gs130w_stereo/scripts/start_avoidance.sh start
+调参:
+  --ros-args -p danger_dist:=0.5 -p obst_ratio:=0.05
+  --ros-args -p enable_motion:=false   # 纯视觉调试 (不发运动指令)
 """
 import json
 import socket
 import sys
 import time
 import threading
-import math
 import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
-from sensor_msgs.msg import Image, Imu
+from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
 # ============ 深度数据源 ============
-TOPIC_DISP = '/StereoNetNode/stereonet_disp'
+TOPIC_DEPTH = '/StereoNetNode/stereonet_depth'
 TOPIC_VISUAL = '/StereoNetNode/stereonet_visual'
-TOPIC_IMU = '/ros_robot_controller/imu_raw'
 
-# ============ 避障参数 (v2 调优) ============
-DECISION_HZ = 10.0         # 决策频率提高到 10Hz (follow_control 需要高频更新)
-DANGER_DISP = 45.0         # 视差 > 此值 → 障碍太近
-CLEAR_DISP = 25.0          # 视差 < 此值 → 路径畅通
-STALE_SEC = 2.0            # 深度数据超时
-TURN_LOCK_SEC = 0.4        # 转向锁定时长 (避免边界抖动)
+# ============ 默认参数 (v4: 距离米 + 占比判定) ============
+DECISION_HZ = 10.0
+DANGER_DIST = 0.45       # 像素距离 < 此值 → 近像素 (透明瓶测偏远, 取宽松)
+NEAR_PCT = 15.0          # 近端分位 (仅状态显示/空旷侧比较用)
+OBST_RATIO = 0.03        # 区域近像素占比 > 3% → 该区域有障碍
+CLEAR_RATIO = 0.015      # 占比 < 1.5% → 清空 (滞回防抖)
+BAND_TOP = 0.40          # 垂直带上界 (避开远处/天空)
+BAND_BOT = 0.70          # 垂直带下界 (避开近处地面误差区)
+STALE_SEC = 2.0          # 深度数据超时
 
-# ============ 速度参数 (follow_control 模式) ============
-FWD_NORMAL = 0.45          # 正常前进速度 (映射到 vx = 0.45 * WALK_X = 4.5)
-FWD_SLOW = 0.25            # 接近障碍减速
-FWD_BACKWARD = -0.3        # 后退速度
-TURN_SPEED = 0.5           # 转向速度
+# ============ 动作时序 (秒) ============
+STOP_SEC = 0.4           # 正前障碍停车确认
+BACK_SEC = 2.0           # 正前障碍后退时长
+TURN_TIMEOUT = 4.0       # 转向兜底超时 (防死循环)
 
-# ============ IMU 航向修正参数 ============
-IMU_INTEGRATE_MAX_DT = 0.5    # IMU 积分最大 dt (超过则跳过, 避免大跳变)
-IMU_STALE_SEC = 1.0           # IMU 数据超时
-YAW_GAIN = 0.6                # 航向修正比例增益
-MAX_YAW_CORRECTION = 0.25     # 最大航向修正 turn 值
-
-# visual 颜色 → 视差量级缩放
+# ============ visual fallback 阈值 (近度 0~30, 大=近) ============
+VIS_DANGER = 18.0
 VISUAL_SCALE = 30.0
+
+# ============ 心跳: arbiter P0 通道 0.3s 超时, 0.2s 重发保持活跃 ============
+CMD_HEARTBEAT_SEC = 0.2
+
+# ============ 方位播报文本 ============
+SPEAK_TEXT = {
+    'left':   '左前方有障碍物，向右避让',
+    'center': '正前方有障碍物，后退绕行',
+    'right':  '右前方有障碍物，向左避让',
+}
 
 
 class StereoAvoidanceNode(Node):
-    """双目深度避障节点 v2"""
+    """双目深度避障节点 v4"""
 
     def __init__(self):
         super().__init__('stereo_avoidance')
@@ -77,61 +95,83 @@ class StereoAvoidanceNode(Node):
         self.declare_parameter('udp_ip', '127.0.0.1')
         self.declare_parameter('udp_port', 5005)
         self.declare_parameter('decision_hz', DECISION_HZ)
-        self.declare_parameter('danger_disp', DANGER_DISP)
-        self.declare_parameter('clear_disp', CLEAR_DISP)
-        self.declare_parameter('use_follow_control', True)
-        self.declare_parameter('use_imu_correction', True)
-        self.declare_parameter('yaw_gain', YAW_GAIN)
-        self.declare_parameter('max_yaw_correction', MAX_YAW_CORRECTION)
-        self.declare_parameter('turn_lock_sec', TURN_LOCK_SEC)
+        self.declare_parameter('danger_dist', DANGER_DIST)
+        self.declare_parameter('near_pct', NEAR_PCT)
+        self.declare_parameter('obst_ratio', OBST_RATIO)
+        self.declare_parameter('clear_ratio', CLEAR_RATIO)
+        self.declare_parameter('band_top', BAND_TOP)
+        self.declare_parameter('band_bot', BAND_BOT)
+        self.declare_parameter('stop_sec', STOP_SEC)
+        self.declare_parameter('back_sec', BACK_SEC)
+        self.declare_parameter('turn_timeout', TURN_TIMEOUT)
         self.declare_parameter('enable_motion', True)
+        self.declare_parameter('speak_udp_ip', '127.0.0.1')
+        self.declare_parameter('speak_udp_port', 5007)
+        self.declare_parameter('control_udp_port', 5008)
+        self.declare_parameter('usb_fusion_port', 5009)   # USB 语义检测 UDP (0=禁用)
+        self.declare_parameter('usb_fusion', True)
 
         self.udp_ip = str(self.get_parameter('udp_ip').value)
         self.udp_port = int(self.get_parameter('udp_port').value)
-        self.danger_disp = float(self.get_parameter('danger_disp').value)
-        self.clear_disp = float(self.get_parameter('clear_disp').value)
-        self.use_follow_control = bool(self.get_parameter('use_follow_control').value)
-        self.use_imu_correction = bool(self.get_parameter('use_imu_correction').value)
-        self.yaw_gain = float(self.get_parameter('yaw_gain').value)
-        self.max_yaw_correction = float(self.get_parameter('max_yaw_correction').value)
-        self.turn_lock_sec = float(self.get_parameter('turn_lock_sec').value)
+        self.danger_dist = float(self.get_parameter('danger_dist').value)
+        self.near_pct = float(self.get_parameter('near_pct').value)
+        self.obst_ratio = float(self.get_parameter('obst_ratio').value)
+        self.clear_ratio = float(self.get_parameter('clear_ratio').value)
+        self.band_top = float(self.get_parameter('band_top').value)
+        self.band_bot = float(self.get_parameter('band_bot').value)
+        self.stop_sec = float(self.get_parameter('stop_sec').value)
+        self.back_sec = float(self.get_parameter('back_sec').value)
+        self.turn_timeout = float(self.get_parameter('turn_timeout').value)
         self.enable_motion = bool(self.get_parameter('enable_motion').value)
+        self.speak_addr = (str(self.get_parameter('speak_udp_ip').value),
+                           int(self.get_parameter('speak_udp_port').value))
+        self.control_port = int(self.get_parameter('control_udp_port').value)
         hz = float(self.get_parameter('decision_hz').value)
+
+        # ==================== USB 语义检测融合 ====================
+        self.usb_fusion = bool(self.get_parameter('usb_fusion').value)
+        self.usb_port = int(self.get_parameter('usb_fusion_port').value)
+        self._usb_lock = threading.Lock()
+        self._usb_result = None      # {'side':..., 'area':..., 'ts':...}
+        if self.usb_fusion and self.usb_port > 0:
+            threading.Thread(target=self._usb_query_loop, daemon=True).start()
+            self.get_logger().info(f'USB 语义融合: 查询 127.0.0.1:{self.usb_port} @3Hz')
 
         # ==================== UDP ====================
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         # ==================== 深度数据缓存 ====================
         self.depth_lock = threading.Lock()
-        self.depth_data = None
-        self.depth_source = None
+        self.depth_data = None       # 距离图 (米) 或 visual 近度图 (0~30)
+        self.depth_source = None     # 'depth' / 'visual'
         self.depth_stamp = 0.0
-        self.disp_active = False
+        self.depth_active = False    # 主源是否来过数据 (来过后禁用 fallback)
 
-        # ==================== IMU 航向 (角速度积分) ====================
-        self.imu_lock = threading.Lock()
-        self.integrated_yaw = 0.0       # 积分得到的相对 yaw (rad)
-        self.imu_last_time = 0.0
-        self.imu_stamp = 0.0
-        self.target_yaw = None          # 前进目标航向 (None=未设定)
+        # ==================== 避障模式开关 ====================
+        self.avoid_mode = False      # False=被动监测, True=自动巡航
+        self._ctrl_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._ctrl_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            self._ctrl_sock.bind(('127.0.0.1', self.control_port))
+            self._ctrl_sock.settimeout(0.5)
+            threading.Thread(target=self._control_loop, daemon=True).start()
+        except Exception as e:
+            self.get_logger().warn(f'控制端口 {self.control_port} 绑定失败: {e}')
 
-        # ==================== 转向锁定 ====================
-        self.turn_lock_dir = 0          # 0=无, 1=左转, -1=右转
-        self.turn_lock_until = 0.0
-
-        # ==================== 避障状态机 ====================
-        # IDLE: 无障碍, 不发任何指令 (让仲裁器降级到语音/手势)
-        # STOP: 检测到障碍, 停车
-        # BACK: 后退
-        # TURN: 转向空旷侧
-        # ADVANCE: 前进绕开
-        # RETURN: 回正方向
+        # ==================== 避障状态机 v4 ====================
+        # IDLE:       无障碍 (巡航模式持续前进 / 被动模式静默只发状态)
+        # TURN_RIGHT: 躲左障, 右转直到清空
+        # TURN_LEFT:  躲右障, 左转直到清空
+        # STOP:       正前障碍停车 (已播报)
+        # BACK:       后退 → 向空旷侧 TURN
         self.avoid_state = 'IDLE'
         self.avoid_state_start = 0.0
-        self.avoid_turn_dir = 0         # 1=左, -1=右 (RETURN 时反向)
-        self.last_obstacle_alert = 0.0  # 语音告警节流
+        self.last_obstacle_alert = 0.0   # 播报节流
+        self.last_sensor_alert = 0.0     # 深度异常播报节流
+        self.detour_count = 0            # 正前障碍连续绕行次数 (防后退死循环)
+        self.motion_driving = False      # 本节点是否正在驱动运动 (off 切换时决定是否补 stop)
 
-        # ==================== 指令去重 ====================
+        # ==================== 指令心跳 ====================
         self.last_cmd = None
         self.last_cmd_time = 0.0
 
@@ -144,9 +184,8 @@ class StereoAvoidanceNode(Node):
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=2,
         )
-        self.create_subscription(Image, TOPIC_DISP, self.disp_cb, sensor_qos)
+        self.create_subscription(Image, TOPIC_DEPTH, self.depth_cb, sensor_qos)
         self.create_subscription(Image, TOPIC_VISUAL, self.visual_cb, sensor_qos)
-        self.create_subscription(Imu, TOPIC_IMU, self.imu_cb, 10)
 
         # ==================== 状态发布 ====================
         self.status_pub = self.create_publisher(String, '/stereo_avoidance/status', 10)
@@ -154,45 +193,48 @@ class StereoAvoidanceNode(Node):
         # ==================== 决策定时器 ====================
         self.timer = self.create_timer(1.0 / hz, self.decision_loop)
 
-        # 启动时先停车
-        self._send_cmd('stop')
+        # v4: 启动即被动监测, 不发任何运动指令 (等避障模式开启)
 
         self.get_logger().info(
-            f'避障节点 v2 启动 | udp={self.udp_ip}:{self.udp_port} hz={hz} '
-            f'danger={self.danger_disp} clear={self.clear_disp} '
-            f'follow_control={self.use_follow_control} '
-            f'imu_correction={self.use_imu_correction} '
-            f'motion_enabled={self.enable_motion}'
+            f'避障节点 v4 启动 | udp={self.udp_ip}:{self.udp_port} hz={hz} '
+            f'danger={self.danger_dist}m obst_ratio={self.obst_ratio} '
+            f'clear_ratio={self.clear_ratio} band={self.band_top}~{self.band_bot} '
+            f'时序: 停{self.stop_sec}s 退{self.back_sec}s 转直到清空(超时{self.turn_timeout}s) '
+            f'| 播报→{self.speak_addr[0]}:{self.speak_addr[1]} '
+            f'控制口:{self.control_port} motion={self.enable_motion}'
         )
-        motion_hint = '【调试模式: 运动输出已禁用】' if not self.enable_motion else ''
-        if motion_hint:
-            self.get_logger().warn(motion_hint)
-        self.get_logger().info(f'订阅: {TOPIC_DISP} + {TOPIC_VISUAL} + {TOPIC_IMU}')
+        if not self.enable_motion:
+            self.get_logger().warn('【调试模式: 运动输出已禁用】')
+        self.get_logger().info(f'订阅: {TOPIC_DEPTH} + {TOPIC_VISUAL}')
         self.get_logger().info('等待深度数据...')
 
     # ================================================================
     #  深度回调
     # ================================================================
 
-    def disp_cb(self, msg: Image):
-        """视差图回调: 高值=近"""
+    def depth_cb(self, msg: Image):
+        """深度图回调 (mm 或 m, 小值=近) → 统一转成米"""
         try:
             arr = self._image_to_array(msg)
             if arr is None:
                 return
             if arr.ndim == 3:
                 arr = arr[:, :, 0]
+            arr = arr.astype(np.float32)
+            # 单位自适应: 最大值 > 100 视为 mm
+            if float(np.max(arr)) > 100.0:
+                arr = arr / 1000.0
             with self.depth_lock:
-                self.depth_data = arr.astype(np.float32)
-                self.depth_source = 'disp'
-                self.disp_active = True
+                self.depth_data = arr
+                self.depth_source = 'depth'
+                self.depth_active = True
                 self.depth_stamp = time.time()
         except Exception as e:
-            self.get_logger().warn(f'disp_cb: {e}')
+            self.get_logger().warn(f'depth_cb: {e}')
 
     def visual_cb(self, msg: Image):
-        """颜色映射深度图回调: 红=近 蓝=远 (有视差时跳过)"""
-        if self.disp_active:
+        """颜色映射深度图回调: 红=近 蓝=远 (有主源深度时跳过)"""
+        if self.depth_active:
             return
         try:
             arr = self._image_to_array(msg)
@@ -230,117 +272,180 @@ class StereoAvoidanceNode(Node):
         return None
 
     # ================================================================
-    #  IMU 回调 (角速度积分得航向)
-    # ================================================================
-
-    def imu_cb(self, msg: Imu):
-        """
-        IMU 节点没有可靠四元数, 用 angular_velocity.z 积分得相对 yaw.
-        gz 正值 = 左转 (逆时针), 负值 = 右转 (顺时针).
-        """
-        now = time.time()
-        gz = float(msg.angular_velocity.z)
-
-        with self.imu_lock:
-            if self.imu_last_time > 0:
-                dt = now - self.imu_last_time
-                if 0 < dt < IMU_INTEGRATE_MAX_DT:
-                    self.integrated_yaw += gz * dt
-            self.imu_last_time = now
-            self.imu_stamp = now
-
-    # ================================================================
     #  深度分析
     # ================================================================
 
-    def analyze_depth(self):
+    def analyze(self):
         """
-        分析深度图, 返回 (left, center, right) proximity (高值=近).
-        修复: 深度图 180° 翻转 (mipi_rotation 导致左右颠倒).
+        分析深度图 → dict:
+          left_d/center_d/right_d: 三区近端分位距离 (米, 显示+比较用)
+          left_r/center_r/right_r: 三区近像素占比 (判定用, 0~1)
+          source: 'depth' / 'visual'
+        方向: 深度图 180°翻转后与左目视图同向 → 图像左 = 机器人左
+        垂直带收窄到 band_top~band_bot (40~70%): 排除近处地面误差区
         """
         with self.depth_lock:
             if self.depth_data is None:
                 return None
-            depth = self.depth_data.copy()
+            data = self.depth_data.copy()
             source = self.depth_source
             stamp = self.depth_stamp
 
         if time.time() - stamp > STALE_SEC:
             return None
 
-        h, w = depth.shape[:2]
+        h, w = data.shape[:2]
         if h < 4 or w < 4:
             return None
 
-        # 修复 180° 翻转: 上下 + 左右翻转
-        # mipi_cam mipi_rotation:=90 导致 stereonet 输出的深度图旋转了 180°
-        # 翻转后图像左侧对应机器人右侧, 图像右侧对应机器人左侧
-        depth = depth[::-1, ::-1]
+        # 180° 翻转: mipi_rotation=90 + 相机物理倒装, stereonet 输出上下左右颠倒
+        data = data[::-1, ::-1]
 
-        # 中间垂直带: 40%~80% (避开天花板和地面噪声)
-        y0, y1 = int(h * 0.4), int(h * 0.8)
-        band = depth[y0:y1, :]
-
-        bh, bw = band.shape[:2]
+        # 垂直带 (避开远处天空和近处地面误差区)
+        band = data[int(h * self.band_top):int(h * self.band_bot), :]
+        bw = band.shape[1]
         x_l = int(bw * 0.35)
         x_r = int(bw * 0.65)
 
-        # 按机器人视角取区域 (图像左右与机器人左右相反)
-        left_p = float(np.percentile(band[:, x_r:], 90))    # 图像右侧 = 机器人左侧
-        center_p = float(np.percentile(band[:, x_l:x_r], 90))
-        right_p = float(np.percentile(band[:, :x_l], 90))   # 图像左侧 = 机器人右侧
+        if source == 'depth':
+            def region_stat(region):
+                valid = region[(region > 0.05) & (region < 10.0)]
+                if valid.size < 20:
+                    return 9.9, 0.0
+                # 近像素占比: 距离 < danger 的像素比例 (抗小片误差)
+                ratio = float(np.count_nonzero(valid < self.danger_dist)) / float(valid.size)
+                near_d = float(np.percentile(valid, self.near_pct))
+                return near_d, ratio
+            left_d, left_r = region_stat(band[:, :x_l])      # 图像左 = 机器人左
+            center_d, center_r = region_stat(band[:, x_l:x_r])
+            right_d, right_r = region_stat(band[:, x_r:])    # 图像右 = 机器人右
+            # 全帧饱和守卫: 三区占比都极高且距离全部钉在下限 → stereonet 垃圾输出
+            # 或镜头被完全遮挡。此时任何避障动作都无意义 (后退数据也不会变)
+            saturated = (left_r > 0.5 and center_r > 0.5 and right_r > 0.5
+                         and max(left_d, center_d, right_d) < 0.25)
+        else:
+            # visual 近度 (大=近): 近度 > VIS_DANGER 的像素占比
+            def region_stat_vis(region):
+                if region.size < 20:
+                    return 0.0, 0.0
+                ratio = float(np.count_nonzero(region > VIS_DANGER)) / float(region.size)
+                prox = float(np.percentile(region, 90))
+                return prox, ratio
+            left_d, left_r = region_stat_vis(band[:, :x_l])
+            center_d, center_r = region_stat_vis(band[:, x_l:x_r])
+            right_d, right_r = region_stat_vis(band[:, x_r:])
+            saturated = False
 
-        return left_p, center_p, right_p, source
+        return {
+            'left_d': left_d, 'center_d': center_d, 'right_d': right_d,
+            'left_r': left_r, 'center_r': center_r, 'right_r': right_r,
+            'source': source,
+            'saturated': saturated,
+        }
 
     # ================================================================
-    #  IMU 航向修正
+    #  USB 语义检测融合 (UDP 5009 ← usb_obstacle_node.py)
     # ================================================================
 
-    def _ensure_target_yaw(self):
-        """进入前进状态时, 记录当前航向作为目标"""
-        if self.target_yaw is None:
-            with self.imu_lock:
-                self.target_yaw = self.integrated_yaw
+    def _usb_query_loop(self):
+        """3Hz 轮询 USB 语义检测节点, 缓存最新结果 (离线时结果为 None)"""
+        qsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        qsock.settimeout(0.3)
+        addr = ('127.0.0.1', self.usb_port)
+        while True:
+            try:
+                qsock.sendto(b'q', addr)
+                data, _ = qsock.recvfrom(1024)
+                res = json.loads(data.decode('utf-8', errors='ignore'))
+                with self._usb_lock:
+                    self._usb_result = res if res.get('online') else None
+            except socket.timeout:
+                with self._usb_lock:
+                    self._usb_result = None
+            except Exception:
+                with self._usb_lock:
+                    self._usb_result = None
+            time.sleep(0.33)
 
-    def _reset_target_yaw(self):
-        """转向/后退时重置目标航向"""
-        self.target_yaw = None
+    def _usb_side(self):
+        """USB 语义判定方位 (透明瓶/黑色无纹理等双目盲区兜底)。
+        结果超过 1.5s 视为离线 → None"""
+        with self._usb_lock:
+            res = self._usb_result
+        if not res or time.time() - res.get('ts', 0) > 1.5:
+            return None
+        return res.get('side')
 
-    def _get_yaw_correction(self):
+    # ================================================================
+    #  避障模式控制 (UDP 5008)
+    # ================================================================
+
+    def _control_loop(self):
+        """接收 UDP 控制:
+          {"avoid_mode":"on"/"off"}   切换自动巡航
+          {"danger_dist":0.15, "obst_ratio":0.05, ...}  运行时调参 (免重启)
         """
-        计算航向修正 turn 值.
-        机器人左偏 (integrated_yaw > target_yaw) → 右转修正 (turn < 0)
-        返回 [-max_yaw_correction, max_yaw_correction]
-        """
-        if not self.use_imu_correction:
-            return 0.0
-        if time.time() - self.imu_stamp > IMU_STALE_SEC:
-            return 0.0  # IMU 数据过期
-        if self.target_yaw is None:
-            return 0.0
-
-        with self.imu_lock:
-            yaw_error = self.integrated_yaw - self.target_yaw
-
-        # 比例控制: 正误差(左偏) → 负 turn(右转修正)
-        correction = -self.yaw_gain * yaw_error
-        # 限幅
-        correction = max(-self.max_yaw_correction,
-                         min(self.max_yaw_correction, correction))
-        return correction
+        while True:
+            try:
+                data, _ = self._ctrl_sock.recvfrom(1024)
+            except socket.timeout:
+                if not rclpy.ok():
+                    return
+                continue
+            except Exception:
+                return
+            try:
+                payload = json.loads(data.decode('utf-8', errors='ignore'))
+            except Exception:
+                continue
+            # 运行时调参 (现场摆瓶标定时实时调阈值)
+            for key in ('danger_dist', 'obst_ratio', 'clear_ratio',
+                        'band_top', 'band_bot', 'stop_sec', 'back_sec',
+                        'turn_timeout'):
+                if key in payload:
+                    try:
+                        setattr(self, key, float(payload[key]))
+                        self.get_logger().warn(f'[TUNE] {key} = {getattr(self, key)}')
+                    except Exception:
+                        pass
+            mode = str(payload.get('avoid_mode', '')).lower()
+            if mode == 'on' and not self.avoid_mode:
+                self.avoid_mode = True
+                self.get_logger().warn('[AVOID_MODE] 开启: 自动巡航前进')
+                self._speak('避障模式已开启')
+            elif mode == 'off' and self.avoid_mode:
+                self.avoid_mode = False
+                self.get_logger().warn('[AVOID_MODE] 关闭: 纯监测 (不控车)')
+                # 仅当本节点正在驱动运动时补发 stop (避免狗一直走)
+                if self.motion_driving:
+                    self._send_cmd('stop')
+                self._set_state('IDLE')
+                self._speak('避障模式已关闭')
 
     # ================================================================
-    #  指令发送
+    #  语音播报 (UDP → voice_assistant:5007)
+    # ================================================================
+
+    def _speak(self, text: str):
+        try:
+            payload = json.dumps({"speak": text}, ensure_ascii=False)
+            self.sock.sendto(payload.encode('utf-8'), self.speak_addr)
+        except Exception:
+            pass
+
+    # ================================================================
+    #  指令发送 (带心跳)
     # ================================================================
 
     def _send_cmd(self, action):
-        """发送离散运动指令 (enable_motion=False 时只记录不发送)"""
-        if action == self.last_cmd:
+        """发送离散运动指令。相同指令每 CMD_HEARTBEAT_SEC 重发,
+        保持仲裁器 P0 通道活跃 (0.3s 超时), 否则长动作会被截断成 stop"""
+        now = time.time()
+        if action == self.last_cmd and now - self.last_cmd_time < CMD_HEARTBEAT_SEC:
             return
         if not self.enable_motion:
-            self.get_logger().debug(f'[MOTION DISABLED] would send: {action}')
             self.last_cmd = action
-            self.last_cmd_time = time.time()
+            self.last_cmd_time = now
             return
         payload = json.dumps({"action": action, "source": "stereo_avoid"})
         try:
@@ -349,169 +454,228 @@ class StereoAvoidanceNode(Node):
             self.get_logger().warn(f'UDP send failed: {e}')
             return
         self.last_cmd = action
-        self.last_cmd_time = time.time()
-
-    def _send_follow(self, forward, turn):
-        """
-        发送 follow_control 连续控制指令.
-        sit.py 不对此去重, 每帧都更新目标速度, 速度平滑过渡.
-        """
-        if not self.enable_motion:
-            self.get_logger().debug(f'[MOTION DISABLED] would send follow: {forward}, {turn}')
-            self.last_cmd = f"follow:{forward:.2f},{turn:.2f}"
-            self.last_cmd_time = time.time()
-            return
-        payload = json.dumps({
-            "mode": "follow_control",
-            "forward": round(float(forward), 3),
-            "turn": round(float(turn), 3),
-            "source": "stereo_avoid"
-        })
-        try:
-            self.sock.sendto(payload.encode('utf-8'), (self.udp_ip, self.udp_port))
-        except Exception:
-            return
-        self.last_cmd = f"follow:{forward:.2f},{turn:.2f}"
-        self.last_cmd_time = time.time()
+        self.last_cmd_time = now
+        self.motion_driving = (action != 'stop')
 
     # ================================================================
     #  决策主循环 — 状态机避障
     # ================================================================
 
     def decision_loop(self):
-        result = self.analyze_depth()
+        result = self.analyze()
         now = time.time()
 
         if result is None:
-            # 无深度数据 → 如果不在避障序列中, 不发任何指令
+            # 无深度数据: 巡航中断 → 停车回 IDLE (仅巡航模式才在控车)
             if self.avoid_state != 'IDLE':
-                # 正在避障中但丢失深度 → 停车, 回 IDLE
                 self._send_cmd('stop')
                 self._set_state('IDLE')
-            self._reset_target_yaw()
-            self.turn_lock_dir = 0
             return
 
-        left_p, center_p, right_p, source = result
+        source = result['source']
+        saturated = result.get('saturated', False)
 
         # 节流日志
         if now - self._last_log > 1.0:
+            if source == 'depth':
+                vals = (f"L={result['left_d']:.2f}m/{result['left_r']*100:.1f}% "
+                        f"C={result['center_d']:.2f}m/{result['center_r']*100:.1f}% "
+                        f"R={result['right_d']:.2f}m/{result['right_r']*100:.1f}%")
+            else:
+                vals = (f"L={result['left_d']:.1f}/{result['left_r']*100:.1f}% "
+                        f"C={result['center_d']:.1f}/{result['center_r']*100:.1f}% "
+                        f"R={result['right_d']:.1f}/{result['right_r']*100:.1f}%(visual)")
+            if saturated:
+                vals += ' [饱和:数据无效]'
             self.get_logger().info(
-                f'[{source}] L={left_p:.1f} C={center_p:.1f} R={right_p:.1f} '
-                f'| state={self.avoid_state} '
+                f'[{source}] {vals} | state={self.avoid_state} '
+                f'| mode={"auto" if self.avoid_mode else "monitor"} '
                 f'| cmd={self.last_cmd}'
             )
             self._last_log = now
 
-        # 发布状态 JSON
+        # 发布状态 JSON (被动模式也持续发布, 界面看判定结果)
         status = json.dumps({
             "source": source,
-            "left": round(left_p, 1),
-            "center": round(center_p, 1),
-            "right": round(right_p, 1),
-            "danger": round(self.danger_disp, 1),
-            "clear": round(self.clear_disp, 1),
+            "left": round(result['left_d'], 2),
+            "center": round(result['center_d'], 2),
+            "right": round(result['right_d'], 2),
+            "left_ratio": round(result['left_r'], 3),
+            "center_ratio": round(result['center_r'], 3),
+            "right_ratio": round(result['right_r'], 3),
+            "unit": "m" if source == "depth" else "prox",
+            "danger": round(self.danger_dist, 2) if source == "depth" else VIS_DANGER,
+            "obst_ratio": round(self.obst_ratio, 3),
+            "decision": ("sensor_error" if saturated
+                         else (self._obstacle_side(result) or "clear")),
+            "usb_side": self._usb_side() if (self.usb_fusion and self.usb_port > 0) else None,
             "enable_motion": self.enable_motion,
+            "avoid_mode": self.avoid_mode,
             "avoid_state": self.avoid_state,
-            "turn_lock": self.turn_lock_dir,
             "last_cmd": self.last_cmd
         })
         smsg = String()
         smsg.data = status
         self.status_pub.publish(smsg)
 
-        # 状态机决策
-        self._decide_state_machine(left_p, center_p, right_p, now)
+        # 深度饱和 (stereonet 垃圾输出/镜头被完全遮挡):
+        # 任何避障动作都无意义 → 停车待命, 绝不再后退 (修"开启避障就一直后退")
+        if saturated:
+            if self.motion_driving:
+                self._send_cmd('stop')
+            if self.avoid_state != 'IDLE':
+                self._set_state('IDLE')
+            if self.avoid_mode and now - self.last_sensor_alert > 10.0:
+                self.last_sensor_alert = now
+                self.get_logger().warn('[SENSOR] 深度数据全帧饱和, 判定无效, 停车待命')
+                self._speak('深度数据异常，请检查相机')
+            return
+
+        # 被动模式: 只发状态, 绝不控车
+        if not self.avoid_mode:
+            return
+
+        self._decide_state_machine(result, now)
 
     def _set_state(self, state):
-        """切换避障状态"""
         if self.avoid_state != state:
             self.get_logger().info(f'[AVOID] {self.avoid_state} → {state}')
         self.avoid_state = state
         self.avoid_state_start = time.time()
 
-    def _decide_state_machine(self, left_p, center_p, right_p, now):
-        """状态机避障策略
+    def _obstacle_side(self, res):
+        """占比判定障碍方位: 'left'/'center'/'right'/None
 
-        IDLE: 无障碍时不发指令, 让仲裁器降级到语音/手势
-              检测到障碍 → STOP
-        STOP: 停车 0.5s → BACK
-        BACK: 后退 1.5s → TURN (判断哪边空旷)
-        TURN: 转向 0.8s → ADVANCE
-        ADVANCE: 前进 1.5s → RETURN
-        RETURN: 反向回转 0.8s → IDLE
+        规则 (用户现场标定):
+          - 三区近像素占比都低于阈值 → None (畅通)
+          - center 触发且占比三区最大 → 'center' (正前障碍, 停+退+绕)
+          - 否则占比高的一侧 → 'left'/'right' (侧向躲避)
         """
-        danger = self.danger_disp
+        l_r, c_r, r_r = res['left_r'], res['center_r'], res['right_r']
+        l_blk = l_r > self.obst_ratio
+        c_blk = c_r > self.obst_ratio
+        r_blk = r_r > self.obst_ratio
+        if not (l_blk or c_blk or r_blk):
+            return None
+        # 正前: center 触发且为主导区域
+        if c_blk and c_r >= l_r and c_r >= r_r:
+            return 'center'
+        # 侧向: 占比高的一侧
+        if l_blk or r_blk:
+            return 'left' if l_r >= r_r else 'right'
+        # 只有 center 触发 (非主导也会到这里: l/r 未触发)
+        return 'center'
+
+    def _side_cleared(self, res, watch_sides):
+        """转向清空判定: 关注侧占比都降到 clear_ratio 以下"""
+        for s in watch_sides:
+            if res[s + '_r'] > self.clear_ratio:
+                return False
+        return True
+
+    def _alert_obstacle(self, side, now):
+        """播报障碍方位 (5s 节流)"""
+        if now - self.last_obstacle_alert > 5.0:
+            self.last_obstacle_alert = now
+            self.get_logger().warn(f'{SPEAK_TEXT[side]}')
+            self._speak(SPEAK_TEXT[side])
+
+    def _decide_state_machine(self, res, now):
+        """状态机 v4 (方向性躲避, 转向直到清空)
+
+        IDLE:       持续前进; 左障→TURN_RIGHT, 右障→TURN_LEFT, 正前→STOP
+        TURN_RIGHT: 右转躲左障, 左+中清空 → IDLE; 超时/障碍换边 → IDLE
+        TURN_LEFT:  左转躲右障, 镜像
+        STOP:       停车 stop_sec → BACK
+        BACK:       后退 back_sec → 向空旷侧 TURN
+        """
         elapsed = now - self.avoid_state_start
+        side = self._obstacle_side(res)
+        # USB 语义融合: 双目漏检 (透明瓶测偏远/黑色无纹理盲区) 时兜底
+        if side is None:
+            usb = self._usb_side()
+            if usb:
+                side = usb
+                if now - getattr(self, '_usb_log_ts', 0) > 2.0:
+                    self._usb_log_ts = now
+                    self.get_logger().warn(f'[USB-FUSION] 双目畅通但 USB 看到 {usb} 障碍')
 
-        # ---------- IDLE: 监测障碍 ----------
+        # ---------- IDLE: 巡航前进 + 监测障碍 ----------
         if self.avoid_state == 'IDLE':
-            if center_p > danger or left_p > danger or right_p > danger:
-                # 检测到障碍!
-                self._send_cmd('stop')
-                self._set_state('STOP')
-                # 语音告警 (节流 5s 一次)
-                if now - self.last_obstacle_alert > 5.0:
-                    self.last_obstacle_alert = now
-                    self.get_logger().warn('前方有障碍! 启动避障')
-            # 无障碍 → 不发任何指令, 仲裁器自动降级到语音/手势
-            return
-
-        # ---------- STOP: 停车 0.5s ----------
-        if self.avoid_state == 'STOP':
-            self._send_cmd('stop')
-            if elapsed > 0.5:
-                self._set_state('BACK')
-            return
-
-        # ---------- BACK: 后退 1.5s ----------
-        if self.avoid_state == 'BACK':
-            self._send_cmd('backward')
-            if elapsed > 1.5:
-                # 判断哪边更空旷
-                if left_p < right_p - 2.0:
-                    self.avoid_turn_dir = 1   # 左转
-                elif right_p < left_p - 2.0:
-                    self.avoid_turn_dir = -1  # 右转
-                else:
-                    # 两边差不多, 默认左转
-                    self.avoid_turn_dir = 1
-                self._set_state('TURN')
-            return
-
-        # ---------- TURN: 转向空旷侧 0.8s ----------
-        if self.avoid_state == 'TURN':
-            if self.avoid_turn_dir > 0:
-                self._send_cmd('turn_left')
-            else:
+            if side == 'left':
+                self.detour_count = 0
+                self._alert_obstacle('left', now)
                 self._send_cmd('turn_right')
-            if elapsed > 0.8:
-                self._send_cmd('stop')
-                self._set_state('ADVANCE')
-            return
-
-        # ---------- ADVANCE: 前进绕开 1.5s ----------
-        if self.avoid_state == 'ADVANCE':
-            # 如果前方仍然有障碍, 重新进入 STOP
-            if center_p > danger:
+                self._set_state('TURN_RIGHT')
+                return
+            if side == 'right':
+                self.detour_count = 0
+                self._alert_obstacle('right', now)
+                self._send_cmd('turn_left')
+                self._set_state('TURN_LEFT')
+                return
+            if side == 'center':
+                # 防后退死循环: 连续绕行 2 次仍被挡 → 停车等待, 不再后退
+                if self.detour_count >= 2:
+                    self._send_cmd('stop')
+                    if now - self.last_obstacle_alert > 5.0:
+                        self.last_obstacle_alert = now
+                        self.get_logger().warn('[AVOID] 多次绕行仍被挡, 停车等待')
+                        self._speak('前方无法通行，请移开障碍物')
+                    return
+                self.detour_count += 1
+                self._alert_obstacle('center', now)
                 self._send_cmd('stop')
                 self._set_state('STOP')
                 return
+            # 无障碍: 持续巡航, 重置绕行计数
+            self.detour_count = 0
             self._send_cmd('forward')
-            if elapsed > 1.5:
-                self._send_cmd('stop')
-                self._set_state('RETURN')
             return
 
-        # ---------- RETURN: 回正方向 0.8s ----------
-        if self.avoid_state == 'RETURN':
-            if self.avoid_turn_dir > 0:
-                self._send_cmd('turn_right')
-            else:
-                self._send_cmd('turn_left')
-            if elapsed > 0.8:
-                self._send_cmd('stop')
+        # ---------- TURN_RIGHT: 右转躲左障 ----------
+        if self.avoid_state == 'TURN_RIGHT':
+            # 左+中清空 → 回巡航; 障碍换到右侧 → 回 IDLE 重新决策; 超时兜底
+            if self._side_cleared(res, ('left', 'center')):
+                self.get_logger().info('[AVOID] 左侧已清空, 继续巡航')
                 self._set_state('IDLE')
+                return
+            if side == 'right' or elapsed > self.turn_timeout:
+                self._set_state('IDLE')
+                return
+            self._send_cmd('turn_right')
+            return
+
+        # ---------- TURN_LEFT: 左转躲右障 ----------
+        if self.avoid_state == 'TURN_LEFT':
+            if self._side_cleared(res, ('right', 'center')):
+                self.get_logger().info('[AVOID] 右侧已清空, 继续巡航')
+                self._set_state('IDLE')
+                return
+            if side == 'left' or elapsed > self.turn_timeout:
+                self._set_state('IDLE')
+                return
+            self._send_cmd('turn_left')
+            return
+
+        # ---------- STOP: 正前障碍停车 ----------
+        if self.avoid_state == 'STOP':
+            self._send_cmd('stop')
+            if elapsed > self.stop_sec:
+                self._set_state('BACK')
+            return
+
+        # ---------- BACK: 后退 → 向空旷侧转 ----------
+        if self.avoid_state == 'BACK':
+            self._send_cmd('backward')
+            if elapsed > self.back_sec:
+                # 转空旷侧: 左侧占比低 → 左转; 否则右转
+                if res['left_r'] <= res['right_r']:
+                    self._send_cmd('turn_left')
+                    self._set_state('TURN_LEFT')
+                else:
+                    self._send_cmd('turn_right')
+                    self._set_state('TURN_RIGHT')
             return
 
     # ================================================================
@@ -520,11 +684,18 @@ class StereoAvoidanceNode(Node):
 
     def destroy_node(self):
         try:
-            self._send_cmd('stop')
-            time.sleep(0.1)
+            self.avoid_mode = False
+            # 仅当本节点正在驱动运动时补发 stop (纯监测退出不打扰遥控)
+            if self.motion_driving:
+                self._send_cmd('stop')
+                time.sleep(0.1)
         except Exception:
             pass
-        self.get_logger().info('避障节点关闭, 已发送停车指令')
+        try:
+            self._ctrl_sock.close()
+        except Exception:
+            pass
+        self.get_logger().info('避障节点关闭')
         super().destroy_node()
 
 

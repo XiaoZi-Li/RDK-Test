@@ -108,6 +108,49 @@ wait_topic_ready() {
     return 1
 }
 
+# 重启后恢复 attach 模式的长驻消费者:
+# stop_all 清了 /dev/shm/fastrtps_* 共享内存段, 活着的旧订阅进程
+# (8095 拍摄节点 / 避障节点) 与新发布者 shm 失配, 永远收不到新帧,
+# 必须重启它们才能恢复 (这就是"重启深度视觉后 8095 取不到图"的根因)
+_recover_attach_consumers() {
+    # 8095 拍摄标定节点 (attach 模式挂在 /image_combine_jpeg 上)
+    if [ -f /tmp/gs130w_capture/mode ] \
+       && [ "$(cat /tmp/gs130w_capture/mode 2>/dev/null)" = "attach" ] \
+       && pgrep -f 'stereo_capture.py' >/dev/null 2>&1; then
+        echo "[RECOVER] 重启 8095 拍摄节点 (等 jpeg 发布者就绪后重订阅)..."
+        # 必须等发布者真的起来再重启: 否则 start_capture.sh 误判成独立模式,
+        # 它的 stop_all 会把刚起好的完整链路全杀掉 (重启后双目图像全丢的根因)
+        nohup bash -c '
+            for i in $(seq 1 60); do
+                if ros2 topic info /image_combine_jpeg 2>/dev/null \
+                   | grep -qE "Publisher count: [1-9]"; then
+                    break
+                fi
+                sleep 1
+            done
+            exec "$0" restart
+        ' "$PROJECT_ROOT/scripts/start_capture.sh" \
+            >> "$LOG_DIR/recover.log" 2>&1 &
+    fi
+    # 避障节点 + 状态桥 (订阅 stereonet 话题, 同样被 shm 清理打断)
+    if [ -f /tmp/gs130w_v2/avoidance.pid ] \
+       && kill -0 "$(cat /tmp/gs130w_v2/avoidance.pid 2>/dev/null)" 2>/dev/null; then
+        echo "[RECOVER] 重启避障节点 (等 stereonet 就绪后重订阅)..."
+        # stereonet 出图要 20-30s, 立即重启会前置检查失败退出 → 避障永远死掉
+        nohup bash -c '
+            for i in $(seq 1 90); do
+                if ros2 topic list 2>/dev/null | grep -q stereonet; then
+                    break
+                fi
+                sleep 1
+            done
+            sleep 3
+            exec "$0" restart
+        ' "$PROJECT_ROOT/scripts/start_avoidance.sh" \
+            >> "$LOG_DIR/recover.log" 2>&1 &
+    fi
+}
+
 start_all() {
     check_env
     mkdir -p "$LOG_DIR"
@@ -199,6 +242,9 @@ start_all() {
     echo $! >> "$PID_FILE"
 
     sleep 2
+
+    # 恢复 attach 消费者 (8095 拍摄 / 避障节点)
+    _recover_attach_consumers
 
     BOARD_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
     [ -z "$BOARD_IP" ] && BOARD_IP="<板端IP>"

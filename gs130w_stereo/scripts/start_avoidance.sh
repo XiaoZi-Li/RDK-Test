@@ -19,13 +19,31 @@
 #       如需切回 LLM 控制, 先 ./start_avoidance.sh stop
 set -u
 
+# 清理 LD_LIBRARY_PATH 中 Trae 沙箱注入的路径
+# (trae-cn-server 的 libstdc++.so.6 版本太旧, 会导致 libdnn 崩溃)
+if echo "${LD_LIBRARY_PATH:-}" | grep -q "trae-cn-server"; then
+    export LD_LIBRARY_PATH=$(echo "$LD_LIBRARY_PATH" | tr ':' '\n' | grep -v "trae-cn-server" | tr '\n' ':' | sed 's/:$//')
+fi
+
+# ROS 日志目录: 沙箱/受限环境下 /root/.ros 可能实际不可写, touch 实测后回落 /tmp
+_ros_log_base="${ROS_LOG_DIR:-${ROS_HOME:-$HOME/.ros}/log}"
+if ! (mkdir -p "$_ros_log_base" 2>/dev/null && touch "$_ros_log_base/.wtest" 2>/dev/null); then
+    export ROS_LOG_DIR="/tmp/ros_log"
+    mkdir -p "$ROS_LOG_DIR" 2>/dev/null
+else
+    rm -f "$_ros_log_base/.wtest" 2>/dev/null
+fi
+unset _ros_log_base
+
 PROJECT_ROOT="/app/gs130w_stereo"
 TROS_SETUP="/opt/tros/humble/setup.bash"
 NODE_SCRIPT="$PROJECT_ROOT/scripts/stereo_avoidance_node.py"
 STATUS_SCRIPT="$PROJECT_ROOT/scripts/status_bridge.py"
+USB_SCRIPT="$PROJECT_ROOT/scripts/usb_obstacle_node.py"
 LOG_DIR="/tmp/gs130w_v2"
 PID_FILE="$LOG_DIR/avoidance.pid"
 STATUS_PID_FILE="$LOG_DIR/status_bridge.pid"
+USB_PID_FILE="$LOG_DIR/usb_obstacle.pid"
 STATUS_PORT=8074
 
 # ============ 环境检查 ============
@@ -114,7 +132,7 @@ start_node() {
     source "$TROS_SETUP"
     set -u
 
-    python3 "$NODE_SCRIPT" "$@" > "$LOG_DIR/avoidance.log" 2>&1 &
+    python3 -u "$NODE_SCRIPT" "$@" > "$LOG_DIR/avoidance.log" 2>&1 &
     PID=$!
     echo "$PID" > "$PID_FILE"
 
@@ -123,6 +141,14 @@ start_node() {
         > "$LOG_DIR/status_bridge.log" 2>&1 &
     STATUS_PID=$!
     echo "$STATUS_PID" > "$STATUS_PID_FILE"
+
+    # USB 语义检测 (双目盲区兜底; 手势节点没起时自动离线, 不影响主流程)
+    if [ -f "$USB_SCRIPT" ]; then
+        echo "[START] 启动 USB 障碍语义检测 (UDP 5009) ..."
+        pkill -f 'usb_obstacle_node.py' 2>/dev/null
+        python3 -u "$USB_SCRIPT" > "$LOG_DIR/usb_obstacle.log" 2>&1 &
+        echo $! > "$USB_PID_FILE"
+    fi
 
     # 等待启动
     sleep 2
@@ -195,6 +221,13 @@ stop_node() {
     # 兜底清端口
     fuser -k ${STATUS_PORT}/tcp 2>/dev/null || true
 
+    echo "[STOP] 停止 USB 障碍检测..."
+    if [ -f "$USB_PID_FILE" ]; then
+        kill "$(cat "$USB_PID_FILE")" 2>/dev/null
+        rm -f "$USB_PID_FILE"
+    fi
+    pkill -f 'usb_obstacle_node.py' 2>/dev/null
+
     echo "[STOP] 避障节点已停止"
     echo "[WARN] 机器人可能仍在运动, 请手动发 stop 指令停车:"
     echo "       echo '{\"action\":\"stop\"}' | nc -u -w1 127.0.0.1 5005"
@@ -218,6 +251,13 @@ status_node() {
         echo "✅ 状态桥接器          运行中  PID=$(cat "$STATUS_PID_FILE") 端口:$STATUS_PORT"
     else
         echo "❌ 状态桥接器          未运行"
+    fi
+
+    # USB 障碍检测
+    if [ -f "$USB_PID_FILE" ] && kill -0 "$(cat "$USB_PID_FILE")" 2>/dev/null; then
+        echo "✅ USB障碍检测         运行中  PID=$(cat "$USB_PID_FILE") UDP:5009"
+    else
+        echo "❌ USB障碍检测         未运行"
     fi
 
     echo "------------------------------------------------------------"

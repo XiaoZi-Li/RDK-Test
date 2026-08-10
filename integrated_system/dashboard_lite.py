@@ -166,6 +166,17 @@ def run_script(script, args=""):
         return False, str(e)
 
 
+def run_script_detached(script, args="", tag="restart"):
+    """后台运行 (重启链路 >30s, 同步等待会被超时杀半路 → 图像链路起不全)"""
+    log = f"/tmp/dashboard_lite_{tag}.log"
+    try:
+        subprocess.Popen(f"setsid nohup {script} {args} > {log} 2>&1 &",
+                         shell=True, start_new_session=True)
+        return True, f"已触发 {script.split('/')[-1]} {args}，后台执行中(约1分钟)，日志 {log}"
+    except Exception as e:
+        return False, str(e)
+
+
 HTML = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -382,10 +393,10 @@ class Handler(BaseHTTPRequestHandler):
             ok, out = run_script("/app/integrated_system/start_all_lite.sh", "stop")
             self._json({"ok": ok, "output": out})
         elif p == "/api/sys/restart":
-            ok, out = run_script("/app/integrated_system/start_all_lite.sh", "restart")
+            ok, out = run_script_detached("/app/integrated_system/start_all_lite.sh", "restart", "sys_restart")
             self._json({"ok": ok, "output": out})
         elif p == "/api/restart/stereo":
-            ok, out = run_script("/app/gs130w_stereo/scripts/start_v2_lite.sh", "restart")
+            ok, out = run_script_detached("/app/gs130w_stereo/scripts/start_v2_lite.sh", "restart", "stereo_restart")
             self._json({"ok": ok, "output": out})
         elif p == "/api/restart/robot":
             ok, out = run_script("/app/integrated_system/start_robot_minimal.sh", "restart")

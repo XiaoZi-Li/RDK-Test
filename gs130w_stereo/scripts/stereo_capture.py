@@ -4,7 +4,7 @@
 
 订阅 mipi_cam 的 /image_combine_jpeg (上下拼接 1280x2176, 上半=右眼 下半=左眼),
 网页实时显示左右眼画面, 点"拍摄"把当前左右眼图像存盘,
-供后续离线深度计算 + 人工标定 (每张图标注 左转/右转/直行), 用于矫正避障判断。
+供后续离线深度计算 + 人工标定 (每张图标注 左转/右转/正前方有障碍物), 用于矫正避障判断。
 
 保存文件 (每次拍摄 4 个, 目录默认 /app/stereo_captures):
   <时间戳>_left_raw.jpg    左眼原始方向 (= stereonet 深度算法实际输入方向)
@@ -35,7 +35,7 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from sensor_msgs.msg import CompressedImage
 
 TOPIC_COMBINED = '/image_combine_jpeg'
-LABELS = ('左转', '右转', '直行')
+LABELS = ('左转', '右转', '正前方有障碍物')
 
 
 class StereoCaptureNode(Node):
@@ -176,6 +176,23 @@ def list_captures(out_dir: str) -> list:
     return items
 
 
+def delete_capture(out_dir: str, ts: str) -> int:
+    """删除一组拍摄 (4 个文件 + labels.csv 条目), 返回删除的文件数"""
+    # 防路径穿越: ts 只允许时间戳格式字符
+    if not ts or not all(c.isalnum() or c == '_' for c in ts):
+        raise ValueError('非法 ts')
+    deleted = 0
+    for suffix in ('_left_raw.jpg', '_right_raw.jpg',
+                   '_left_view.jpg', '_right_view.jpg', '_depth.jpg', '_depth_view.jpg'):
+        fpath = os.path.join(out_dir, ts + suffix)
+        if os.path.isfile(fpath):
+            os.remove(fpath)
+            deleted += 1
+    # 清掉标定条目
+    save_label(os.path.join(out_dir, 'labels.csv'), ts, '')
+    return deleted
+
+
 # ============ HTML 页面 ============
 PAGE_HTML = r"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -216,6 +233,9 @@ h2 { font-size:15px; color:#58a6ff; margin:14px 0 8px; }
 .lbtn:hover { border-color:#58a6ff; }
 .lbtn.cur { background:#1a2a3a; border-color:#58a6ff; color:#58a6ff;
   font-weight:bold; }
+.dbtn { padding:5px 10px; font-size:12px; border-radius:5px; cursor:pointer;
+  border:1px solid #f85149; background:#3a1a1a; color:#f85149; }
+.dbtn:hover { background:#4a2a2a; }
 .hint { max-width:1100px; margin:6px auto 0; font-size:12px; color:#8b949e; }
 </style>
 </head>
@@ -232,7 +252,7 @@ h2 { font-size:15px; color:#58a6ff; margin:14px 0 8px; }
 </div>
 <div class="hint">保存目录: <span id="dir"></span> | 每次拍摄存 4 个文件:
 *_left_raw.jpg / *_right_raw.jpg (原始方向=深度算法输入) + *_left_view.jpg / *_right_view.jpg (人眼方向)。
-拍完在下方给每张图标定正确决策 (左转/右转/直行), 结果存 labels.csv。</div>
+拍完在下方给每张图标定正确决策 (左转/右转/正前方有障碍物), 结果存 labels.csv。</div>
 <h2>已拍摄 <span id="cnt">0</span> 组</h2>
 <div id="gallery"></div>
 <script>
@@ -254,6 +274,15 @@ async function setLabel(ts, label) {
     body: JSON.stringify({ts: ts, label: label})});
   loadList();
 }
+async function delShot(ts) {
+  if (!confirm('确认删除 ' + ts + ' 这组图像? (4个文件+标定记录一起删)')) return;
+  const r = await fetch('/api/delete', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ts: ts})});
+  const d = await r.json();
+  if (!d.ok) alert('删除失败: ' + d.error);
+  loadList();
+}
 async function loadList() {
   const r = await fetch('/api/list');
   const d = await r.json();
@@ -269,9 +298,10 @@ async function loadList() {
       </div>
       <div class="meta">${it.ts}</div>
       <div class="btns">
-        ${['左转','右转','直行'].map(l =>
+        ${['左转','右转','正前方有障碍物'].map(l =>
           `<button class="lbtn ${it.label===l?'cur':''}"
             onclick="setLabel('${it.ts}','${it.label===l?'':l}')">${l}</button>`).join('')}
+        <button class="dbtn" onclick="delShot('${it.ts}')">删除</button>
       </div>
     </div>`;
   });
@@ -417,6 +447,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({'ok': True})
             except Exception as e:
                 self._json({'ok': False, 'error': str(e)})
+        elif path == '/api/delete':
+            try:
+                cl = int(self.headers.get('Content-Length', 0))
+                body = __import__('json').loads(self.rfile.read(cl) or b'{}')
+                ts = str(body.get('ts', '')).strip()
+                n = delete_capture(self.out_dir, ts)
+                self.node.get_logger().info(f'删除拍摄: {ts} ({n} 个文件)')
+                self._json({'ok': True, 'deleted': n})
+            except Exception as e:
+                self._json({'ok': False, 'error': str(e)}, 400)
         else:
             self.send_error(404)
 

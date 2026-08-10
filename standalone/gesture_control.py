@@ -461,6 +461,42 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     allow_reuse_address = True
 
 
+class LatestFrameReader:
+    """后台线程持续读摄像头, 主循环永远拿最新一帧。
+
+    解决卡顿: cap.read() 直连时, V4L2 缓冲区会堆积数帧旧画面
+    (30fps 摄像头 + MediaPipe 每帧 ~80ms → 延迟越积越多)。
+    读帧线程以摄像头全速排空缓冲区, 推理线程按自己节奏取最新帧。
+    """
+    def __init__(self, cap):
+        self.cap = cap
+        self.lock = threading.Lock()
+        self.frame = None
+        self.seq = 0
+        self.stopped = False
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+
+    def start(self):
+        self.thread.start()
+        return self
+
+    def _loop(self):
+        while not self.stopped:
+            ret, frame = self.cap.read()
+            if ret and frame is not None:
+                with self.lock:
+                    self.frame = frame
+                    self.seq += 1
+
+    def read(self):
+        """返回 (frame, seq); 无新帧时 frame=None"""
+        with self.lock:
+            return self.frame, self.seq
+
+    def stop(self):
+        self.stopped = True
+
+
 def find_first_usb_camera() -> Optional[str]:
     if not os.path.isdir('/dev'):
         return None
@@ -487,7 +523,7 @@ def main():
                         help='手势消失多少秒后停车')
     parser.add_argument('--lock-sec', type=float, default=2.5,
                         help='离散动作(sit/crouch)防重复锁时长')
-    parser.add_argument('--confirm-frames', type=int, default=6,
+    parser.add_argument('--confirm-frames', type=int, default=4,
                         help='同一手势连续出现多少帧才触发动作 (防抖, 0/1=关闭确认)')
     args = parser.parse_args()
 
@@ -504,18 +540,21 @@ def main():
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     cap.set(cv2.CAP_PROP_FPS, 30)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)   # 只留最新帧, 降延迟
     print(f"[camera] 已打开 {device}")
 
     # 2. 初始化 MediaPipe Hands
+    # model_complexity=0: 轻量模型, X5 CPU 上比默认(1)快约一倍, 手势分类精度足够
     mp_hands = mp.solutions.hands
     mp_drawing = mp.solutions.drawing_utils
     hands = mp_hands.Hands(
         static_image_mode=False,
+        model_complexity=0,
         max_num_hands=args.max_hands,
         min_detection_confidence=0.6,
         min_tracking_confidence=0.5,
     )
-    print("[mediapipe] Hands 初始化完成")
+    print("[mediapipe] Hands 初始化完成 (model_complexity=0 轻量)")
 
     # 3. 初始化 UDP + 动作调度
     udp = SitUdpClient(args.udp_ip, args.udp_port)
@@ -543,14 +582,18 @@ def main():
     http_thread.start()
     print(f"[server] MJPEG 推流已就绪: http://0.0.0.0:{args.port}/")
 
-    # 5. 主循环
+    # 5. 主循环 (读帧线程给最新帧, 无新帧时小睡省 CPU)
+    reader = LatestFrameReader(cap).start()
     fps_t0 = time.time()
     fps_cnt = 0
+    last_seq = 0
     try:
         while True:
-            ret, frame = cap.read()
-            if not ret or frame is None:
+            frame, seq = reader.read()
+            if frame is None or seq == last_seq:
+                time.sleep(0.005)
                 continue
+            last_seq = seq
 
             # MediaPipe 需要 RGB
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -606,6 +649,7 @@ def main():
         print("\n[main] 退出中...")
     finally:
         scheduler.brake()
+        reader.stop()
         cap.release()
         hands.close()
         udp.close()

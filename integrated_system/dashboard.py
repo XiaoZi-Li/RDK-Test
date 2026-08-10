@@ -160,6 +160,59 @@ def send_udp_action(ip: str, port: int, action: str, source: str = "dashboard"):
         return False, str(e)
 
 
+def speak_tts(text: str):
+    """经 voice_assistant 的 UDP 5007 喇叭播报 (fire-and-forget, 语音助手不在线时静默丢弃)"""
+    text = (text or "").strip()
+    if not text:
+        return
+    try:
+        payload = json.dumps({"speak": text}, ensure_ascii=False)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(payload.encode("utf-8"), ("127.0.0.1", 5007))
+        sock.close()
+    except Exception:
+        pass
+
+
+def get_avoid_status() -> dict:
+    """查询避障节点真实状态: 经 status_bridge(8074) 读 /stereo_avoidance/status"""
+    node_online = check_process("stereo_avoidance_node.py")
+    result = {"node_online": node_online, "avoid_mode": False, "avoid_state": None}
+    if not node_online:
+        return result
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8074/status", timeout=0.8) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+            result["avoid_mode"] = bool(data.get("avoid_mode", False))
+            result["avoid_state"] = data.get("avoid_state")
+            result["left"] = data.get("left")
+            result["center"] = data.get("center")
+            result["right"] = data.get("right")
+            result["left_ratio"] = data.get("left_ratio")
+            result["center_ratio"] = data.get("center_ratio")
+            result["right_ratio"] = data.get("right_ratio")
+            result["decision"] = data.get("decision")
+            result["usb_side"] = data.get("usb_side")
+            result["unit"] = data.get("unit")
+    except Exception:
+        pass
+    return result
+
+
+def set_avoid_mode(mode: str) -> tuple:
+    """UDP → stereo_avoidance_node:5008 切换避障模式"""
+    if not check_process("stereo_avoidance_node.py"):
+        return False, "避障节点未运行 (先启动全部组件或 start_avoidance.sh)"
+    payload = json.dumps({"avoid_mode": mode})
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(payload.encode("utf-8"), ("127.0.0.1", 5008))
+        sock.close()
+        return True, f"避障模式已切换: {'开启自动巡航' if mode == 'on' else '关闭(被动监测)'}"
+    except Exception as e:
+        return False, str(e)
+
+
 # ============ LLM 对话控制 (网页文字版语音助手) ============
 _llm = None
 _llm_init_lock = threading.Lock()
@@ -229,6 +282,20 @@ def run_script(script: str, args: str = "") -> tuple:
         return True, result.stdout + result.stderr
     except subprocess.TimeoutExpired:
         return False, "超时"
+    except Exception as e:
+        return False, str(e)
+
+
+def run_script_detached(script: str, args: str = "", tag: str = "restart") -> tuple:
+    """后台运行脚本 (重启链路耗时 >30s, 同步等待会被超时杀半路,
+    导致 mipi_cam 起来了但 mjpeg_bridge 等后续步骤没跑 → 图像全丢)"""
+    log = f"/tmp/dashboard_{tag}.log"
+    try:
+        subprocess.Popen(
+            f"setsid nohup {script} {args} > {log} 2>&1 &",
+            shell=True, start_new_session=True,
+        )
+        return True, f"已触发 {os.path.basename(script)} {args}，后台执行中(约1分钟)，日志 {log}"
     except Exception as e:
         return False, str(e)
 
@@ -330,6 +397,11 @@ body {
   background: #21262d; color: #c9d1d9; transition: all 0.15s;
 }
 .action-btn:hover { background: #30363d; border-color: #58a6ff; }
+.action-btn.hold {
+  touch-action: none; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.action-btn.hold:active { background: #1a3a2a; border-color: #3fb950; }
 .result-msg {
   margin-top: 8px; padding: 6px 10px; border-radius: 4px; font-size: 12px;
   display: none;
@@ -420,16 +492,35 @@ body {
   <div class="card">
     <h2>🎮 运动控制测试</h2>
     <div class="action-grid">
-      <div class="action-btn" onclick="sendAction('forward')">⬆️ 前进</div>
-      <div class="action-btn" onclick="sendAction('backward')">⬇️ 后退</div>
-      <div class="action-btn" onclick="sendAction('turn_left')">⬅️ 左转</div>
-      <div class="action-btn" onclick="sendAction('turn_right')">➡️ 右转</div>
+      <div class="action-btn hold" onpointerdown="pressAction('forward',event)" onpointerup="releaseAction()" onpointerleave="releaseAction()" onpointercancel="releaseAction()" oncontextmenu="return false">⬆️ 前进</div>
+      <div class="action-btn hold" onpointerdown="pressAction('backward',event)" onpointerup="releaseAction()" onpointerleave="releaseAction()" onpointercancel="releaseAction()" oncontextmenu="return false">⬇️ 后退</div>
+      <div class="action-btn hold" onpointerdown="pressAction('turn_left',event)" onpointerup="releaseAction()" onpointerleave="releaseAction()" onpointercancel="releaseAction()" oncontextmenu="return false">⬅️ 左转</div>
+      <div class="action-btn hold" onpointerdown="pressAction('turn_right',event)" onpointerup="releaseAction()" onpointerleave="releaseAction()" onpointercancel="releaseAction()" oncontextmenu="return false">➡️ 右转</div>
       <div class="action-btn" onclick="sendAction('sit')">🪑 坐下</div>
       <div class="action-btn" onclick="sendAction('stand')">🧍 站立</div>
-      <div class="action-btn" onclick="sendAction('stop')">✋ 停止</div>
-      <div class="action-btn" onclick="sendAction('walk')">🚶 行走</div>
+      <div class="action-btn" onclick="releaseAction(true);sendAction('stop')">✋ 停止</div>
+      <div class="action-btn hold" onpointerdown="pressAction('walk',event)" onpointerup="releaseAction()" onpointerleave="releaseAction()" onpointercancel="releaseAction()" oncontextmenu="return false">🚶 行走</div>
     </div>
+    <div class="chat-hint">方向/行走键支持长按：按住持续运动，松开即停（0.2s 心跳保持仲裁通道）</div>
     <div id="action-result" class="result-msg"></div>
+  </div>
+
+  <!-- 避障模式 -->
+  <div class="card">
+    <h2>🛡️ 避障模式</h2>
+    <div class="btn-group" style="margin-bottom:8px">
+      <button class="btn green" onclick="setAvoidMode('on')">开启自动巡航</button>
+      <button class="btn red" onclick="setAvoidMode('off')">关闭避障</button>
+    </div>
+    <div class="status-row">
+      <span class="label">当前状态</span>
+      <span id="avoid-state" style="font-size:12px;color:#8b949e">未知</span>
+    </div>
+    <div class="status-row">
+      <span class="label">避障阶段</span>
+      <span id="avoid-phase" style="font-size:12px;color:#8b949e">-</span>
+    </div>
+    <div class="chat-hint">开启后持续前进：左障碍→右转，右障碍→左转，正前障碍→停车播报→后退→向空旷侧转，清空后自动续走；关闭后为纯监测（只显示判断结果，绝不控车）</div>
   </div>
 
   <!-- LLM 对话控制 -->
@@ -442,6 +533,9 @@ body {
       <input id="chat-text" type="text" placeholder="输入指令或聊天内容，回车发送..." autocomplete="off">
       <button class="btn blue" id="chat-send" onclick="sendChat()">发送</button>
     </div>
+    <label style="font-size:12px;color:#8b949e;display:flex;align-items:center;gap:4px;margin-top:6px">
+      <input type="checkbox" id="chat-speak" checked> 🔊 喇叭同步播报回答
+    </label>
     <div class="chat-hint">与语音助手共用同一个 DeepSeek 模型和动作执行通道（source=voice），支持多动作序列和时长控制；问「你能看到什么」类问题会调用实时摄像头画面（📷 标记）</div>
   </div>
 
@@ -509,6 +603,8 @@ async function refreshStatus() {
       </div>`;
     });
     document.getElementById('video-grid').innerHTML = html;
+
+    refreshAvoidState();
     
   } catch(e) {
     document.getElementById('refresh-indicator').textContent = '⚠ 刷新失败';
@@ -554,15 +650,84 @@ async function restartRobot() {
 }
 
 // 运动控制
-async function sendAction(action) {
-  showResult('action-result', `发送: ${action}...`, '');
+async function sendAction(action, quiet) {
+  if (!quiet) showResult('action-result', `发送: ${action}...`, '');
   try {
     const resp = await fetch(`/api/action/${action}`, {method:'POST'});
     const data = await resp.json();
-    showResult('action-result', data.message || data.error, data.ok?'ok':'err');
+    if (!quiet) showResult('action-result', data.message || data.error, data.ok?'ok':'err');
   } catch(e) {
-    showResult('action-result', e.message, 'err');
+    if (!quiet) showResult('action-result', e.message, 'err');
   }
+}
+
+// ===== 长按持续运动 (按下立即发 + 0.2s 心跳保持仲裁通道, 松开发 stop) =====
+let holdTimer = null;
+let holdAction = null;
+function pressAction(action, ev) {
+  if (ev) ev.preventDefault();
+  releaseAction(true);   // 清掉上一个 (防卡键/多点触控)
+  holdAction = action;
+  sendAction(action, true);
+  holdTimer = setInterval(() => sendAction(action, true), 200);
+  showResult('action-result', `按住中: ${action} (松开停止)`, 'ok');
+}
+function releaseAction(silent) {
+  if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
+  if (holdAction) {
+    holdAction = null;
+    sendAction('stop', true);
+    if (!silent) showResult('action-result', '已停止', 'ok');
+  }
+}
+// 页面失焦/隐藏时兜底停车
+window.addEventListener('blur', () => releaseAction(true));
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAction(true); });
+
+// ===== 避障模式 =====
+async function setAvoidMode(mode) {
+  try {
+    const resp = await fetch('/api/avoid_mode', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mode: mode})
+    });
+    const data = await resp.json();
+    showResult('sys-result', data.message || data.error, data.ok?'ok':'err');
+    setTimeout(refreshAvoidState, 500);
+  } catch(e) {
+    showResult('sys-result', e.message, 'err');
+  }
+}
+async function refreshAvoidState() {
+  try {
+    const resp = await fetch('/api/avoid_mode');
+    const data = await resp.json();
+    const el = document.getElementById('avoid-state');
+    const ph = document.getElementById('avoid-phase');
+    if (!data.node_online) {
+      el.textContent = '节点离线';
+      el.style.color = '#f85149';
+      ph.textContent = '-';
+      return;
+    }
+    el.textContent = data.avoid_mode ? '✅ 自动巡航中' : '⏸ 纯监测(不控车)';
+    el.style.color = data.avoid_mode ? '#3fb950' : '#8b949e';
+    if (data.avoid_state) {
+      const names = {IDLE:'巡航/监测', STOP:'停车', BACK:'后退', TURN_RIGHT:'右转躲左障', TURN_LEFT:'左转躲右障'};
+      ph.textContent = names[data.avoid_state] || data.avoid_state;
+      if (typeof data.left_ratio === 'number') {
+        ph.textContent += ` (近像素 左${(data.left_ratio*100).toFixed(1)}% 中${(data.center_ratio*100).toFixed(1)}% 右${(data.right_ratio*100).toFixed(1)}%)`;
+      }
+      if (data.decision && data.decision !== 'clear') {
+        const dnames = {left:'左前方障碍', center:'正前方障碍', right:'右前方障碍',
+                        sensor_error:'⚠深度数据异常'};
+        ph.textContent += ` → ${dnames[data.decision] || data.decision}`;
+      }
+      if (data.usb_side) {
+        ph.textContent += ` [USB:${data.usb_side==='left'?'左':data.usb_side==='right'?'右':'中'}有物]`;
+      }
+    }
+  } catch(e) {}
 }
 
 function showResult(id, msg, type) {
@@ -595,7 +760,7 @@ async function sendChat() {
     const resp = await fetch('/api/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text: text})
+      body: JSON.stringify({text: text, speak: document.getElementById('chat-speak').checked})
     });
     const data = await resp.json();
     if (data.ok) {
@@ -704,6 +869,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         elif path == "/api/status":
             self.send_json(get_status())
 
+        elif path == "/api/avoid_mode":
+            self.send_json(get_avoid_status())
+
         elif path.startswith("/api/log/"):
             log_key = path.split("/api/log/")[1]
             log_map = {
@@ -735,11 +903,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.send_json({"ok": ok, "output": out})
 
         elif path == "/api/sys/restart":
-            ok, out = run_script("/app/integrated_system/start_all.sh", "restart")
+            ok, out = run_script_detached("/app/integrated_system/start_all.sh", "restart", "sys_restart")
             self.send_json({"ok": ok, "output": out})
 
         elif path == "/api/restart/stereo":
-            ok, out = run_script("/app/gs130w_stereo/scripts/start_v2.sh", "restart")
+            ok, out = run_script_detached("/app/gs130w_stereo/scripts/start_v2.sh", "restart", "stereo_restart")
             self.send_json({"ok": ok, "output": out})
 
         elif path == "/api/restart/robot":
@@ -749,6 +917,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
         elif path.startswith("/api/action/"):
             action = path.split("/api/action/")[1]
             ok, msg = send_udp_action("127.0.0.1", 5005, action, "dashboard")
+            self.send_json({"ok": ok, "message": msg})
+
+        elif path == "/api/avoid_mode":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length) if content_length else b"{}"
+            try:
+                data = json.loads(body)
+                mode = str(data.get("mode", "")).lower()
+            except Exception:
+                self.send_json({"ok": False, "error": "请求体不是合法 JSON"}, 400)
+                return
+            if mode not in ("on", "off"):
+                self.send_json({"ok": False, "error": "mode 必须是 on/off"}, 400)
+                return
+            ok, msg = set_avoid_mode(mode)
             self.send_json({"ok": ok, "message": msg})
 
         elif path == "/api/move":
@@ -775,12 +958,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self.send_json({"ok": False, "error": str(e)})
 
         elif path == "/api/chat":
-            # LLM 对话控制: {"text": "..."} → {"reply", "actions"}
+            # LLM 对话控制: {"text": "...", "speak": true} → {"reply", "actions"}
+            # speak=true 时回答经 voice_assistant UDP:5007 喇叭同步播报
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length) if content_length else b"{}"
             try:
                 data = json.loads(body)
                 text = str(data.get("text", "")).strip()
+                want_speak = bool(data.get("speak", False))
             except Exception:
                 self.send_json({"ok": False, "error": "请求体不是合法 JSON"}, 400)
                 return
@@ -803,6 +988,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     reply = vision.look(text)
                     print(f"[CHAT] VISION query='{text}' hit={vision_hit} "
                           f"latency={time.time()-t0:.1f}s", flush=True)
+                    if want_speak:
+                        speak_tts(reply)
                     self.send_json({"ok": True, "reply": reply,
                                     "vision": True, "actions": []})
                 except Exception as e:
@@ -823,6 +1010,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             if actions:
                 run_actions_bg(actions)
+            if want_speak and reply:
+                speak_tts(reply)
             self.send_json({"ok": True, "reply": reply, "actions": actions})
 
         else:

@@ -184,11 +184,11 @@ start_all() {
     wait_for_tcp 8094 "手势推流" 20
 
     # ---------- 6. 语音助手（云端 LLM 对话 + 意图识别控制） ----------
-    # 喇叭音量: 默认降到 10% (夜间防吵), 白天可用 SPEAKER_VOLUME=60 ./start_all.sh start 覆盖
+    # 喇叭音量: 默认 50% (2026-08-11 用户确认), 夜间 SPEAKER_VOLUME=10 覆盖
     # 抗噪参数: 增益 6dB + VAD 最严格档 3 + 连续10帧人声才识别 (2026-08-10 收紧)
-    echo "[START] 6/7 设置喇叭音量 ${SPEAKER_VOLUME:-10}% 并启动语音助手（DeepSeek LLM）..."
+    echo "[START] 6/7 设置喇叭音量 ${SPEAKER_VOLUME:-50}% 并启动语音助手（DeepSeek LLM）..."
     amixer -c 0 sset PCM unmute >/dev/null 2>&1 || true
-    amixer -c 0 sset PCM "${SPEAKER_VOLUME:-10}%" >/dev/null 2>&1 || true
+    amixer -c 0 sset PCM "${SPEAKER_VOLUME:-50}%" >/dev/null 2>&1 || true
     voice_pid=$(launch_bg "$LOG_DIR/voice_assistant.log" python3 "$INTEGRATED_DIR/voice_assistant.py" \
         --mic plughw:1,0 \
         --speaker plughw:0,0 \
