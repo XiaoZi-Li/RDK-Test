@@ -99,6 +99,23 @@ wait_for_udp() {
     return 1
 }
 
+wait_for_tcp() {
+    local port=$1
+    local name=$2
+    local max_wait=${3:-20}
+    echo "[WAIT] 等待 $name 在 TCP $port 就绪..."
+    for i in $(seq 1 "$max_wait"); do
+        if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+            exec 3>&- 3<&- 2>/dev/null
+            echo "[WAIT] $name 已就绪"
+            return 0
+        fi
+        sleep 0.5
+    done
+    echo "[WARN] $name 在 TCP $port 未就绪, 继续启动后续组件"
+    return 1
+}
+
 record_pid() {
     local name=$1
     local pid=$2
@@ -157,14 +174,15 @@ start_all() {
 
     # ---------- 6. 语音助手（云端 LLM 对话 + 意图识别控制） ----------
     # 喇叭音量: 默认降到 10% (夜间防吵), 白天可用 SPEAKER_VOLUME=60 ./start_all_lite.sh start 覆盖
+    # 抗噪参数: 增益 6dB + VAD 最严格档 3 + 连续10帧人声才识别 (2026-08-10 收紧)
     echo "[START] 6/7 设置喇叭音量 ${SPEAKER_VOLUME:-10}% 并启动语音助手（DeepSeek LLM）..."
     amixer -c 0 sset PCM unmute >/dev/null 2>&1 || true
     amixer -c 0 sset PCM "${SPEAKER_VOLUME:-10}%" >/dev/null 2>&1 || true
     voice_pid=$(launch_bg "$LOG_DIR/voice_assistant.log" python3 "$INTEGRATED_DIR/voice_assistant.py" \
         --mic plughw:1,0 \
         --speaker plughw:0,0 \
-        --gain 10 \
-        --vad-aggressiveness 2 \
+        --gain 6 \
+        --vad-aggressiveness 3 \
         --silence 1.0)
 
     # ---------- 7. 轻量 Web 监控面板 (无视频流) ----------
@@ -172,7 +190,7 @@ start_all() {
     dashboard_pid=$(launch_bg "$LOG_DIR/dashboard_lite.log" python3 -u "$INTEGRATED_DIR/dashboard_lite.py" \
         --host 0.0.0.0 --port 8082)
     record_pid "dashboard" "$dashboard_pid"
-    sleep 2
+    wait_for_tcp 8082 "轻量监控面板" 20
 
     BOARD_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
     [ -z "$BOARD_IP" ] && BOARD_IP="<板端IP>"

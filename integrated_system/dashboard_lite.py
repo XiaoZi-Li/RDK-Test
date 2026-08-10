@@ -403,6 +403,13 @@ class Handler(BaseHTTPRequestHandler):
             if not text:
                 self._json({"ok": False, "error": "text 为空"}, 400)
                 return
+            # 视觉问句: 轻量版手势不推流(8094关闭), 无画面可取, 直接告知
+            from vision_assistant import match_vision_query
+            if match_vision_query(text):
+                self._json({"ok": True, "vision": True, "actions": [],
+                            "reply": "轻量模式没有开摄像头画面，我暂时看不到东西。"
+                                     "需要视觉问答请启动完整版 start_all.sh。"})
+                return
             try:
                 llm = get_llm()
             except Exception as e:

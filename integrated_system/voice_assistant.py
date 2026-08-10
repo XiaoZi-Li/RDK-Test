@@ -28,7 +28,7 @@ import wave
 # 把本目录加入 path 以导入 llm_dialogue / vision_assistant
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from llm_dialogue import LlmDialogue
-from vision_assistant import VisionClient, is_vision_query
+from vision_assistant import VisionClient, is_vision_query, match_vision_query
 
 # ---------- Vosk ASR ----------
 try:
@@ -232,10 +232,11 @@ def init_tts(backend: str):
 # ============ VAD 录音 ============
 def record_wav(device: str, wav_path: str, seconds: int, rate: int = 16000,
                use_vad: bool = True, vad_aggressiveness: int = 2,
-               silence_dur: float = 1.0, gain_db: int = 0):
+               silence_dur: float = 1.0, gain_db: int = 0,
+               min_speech_frames: int = 10):
     if use_vad and HAS_VAD:
         return _record_with_vad(device, wav_path, rate, vad_aggressiveness,
-                                silence_dur, gain_db)
+                                silence_dur, gain_db, min_speech_frames)
     raw = wav_path + '.raw.wav'
     subprocess.run(
         ['arecord', '-D', device, '-d', str(seconds),
@@ -245,7 +246,8 @@ def record_wav(device: str, wav_path: str, seconds: int, rate: int = 16000,
     _postprocess_audio(raw, wav_path, gain_db)
 
 
-def _record_with_vad(device, wav_path, sample_rate, aggressiveness, silence_dur, gain_db):
+def _record_with_vad(device, wav_path, sample_rate, aggressiveness, silence_dur,
+                     gain_db, min_speech_frames=10):
     vad = webrtcvad.Vad(aggressiveness)
     frame_duration = 30  # ms
     frame_size = int(sample_rate * frame_duration / 1000) * 2
@@ -266,7 +268,7 @@ def _record_with_vad(device, wav_path, sample_rate, aggressiveness, silence_dur,
     silence_start = 0
     total_speech = 0
     speech_frame_count = 0
-    min_speech_frames = 6
+    # min_speech_frames: 连续多少帧(30ms/帧)人声才进入识别, 抗噪收紧 6→10 (~300ms)
     silence_frame_count = 0
     min_silence_frames = int(silence_dur * 1000 / frame_duration)
 
@@ -455,6 +457,10 @@ def main():
     parser.add_argument('--gain', type=int, default=None, help='录音增益 dB')
     parser.add_argument('--silence', type=float, default=None, help='静音结束秒数')
     parser.add_argument('--vad-aggressiveness', type=int, default=None)
+    parser.add_argument('--min-speech-frames', type=int, default=None,
+                        help='连续人声帧数阈值(30ms/帧), 抗噪, 默认10')
+    parser.add_argument('--tts-settle-ms', type=int, default=None,
+                        help='TTS播报后静默毫秒数, 防喇叭余音自触发, 默认400')
     parser.add_argument('--volume', default=None, help='TTS 音量 dB')
     parser.add_argument('--move-sec', type=float, default=None, help='持续动作默认秒数')
     parser.add_argument('--discrete-sec', type=float, default=None,
@@ -477,6 +483,10 @@ def main():
     gain = args.gain if args.gain is not None else voice_cfg.get('gain_db', 10)
     silence = args.silence or voice_cfg.get('silence_duration', 1.0)
     vad_aggr = args.vad_aggressiveness or voice_cfg.get('vad_aggressiveness', 2)
+    min_speech = args.min_speech_frames or voice_cfg.get('min_speech_frames', 10)
+    tts_settle_ms = args.tts_settle_ms
+    if tts_settle_ms is None:
+        tts_settle_ms = voice_cfg.get('tts_settle_ms', 400)
     volume = args.volume or voice_cfg.get('tts_volume_db', '-5')
     move_sec = args.move_sec or motion_cfg.get('move_duration_sec', 2.5)
     discrete_sec = args.discrete_sec or motion_cfg.get('discrete_wait_sec', 2.0)
@@ -495,7 +505,8 @@ def main():
     print(f' 音响:   {speaker}')
     print(f' TTS:    {tts_backend}')
     print(f' 音量:   {volume}dB')
-    print(f' 录音:   {"VAD" if use_vad else "固定秒数"} + {gain}dB增益')
+    print(f' 录音:   {"VAD" if use_vad else "固定秒数"} + {gain}dB增益'
+          f' (aggr={vad_aggr}, min_speech={min_speech}帧, TTS静默{tts_settle_ms}ms)')
     print(f' 唤醒词: {"关闭" if not wakeup_enabled else wakeup_keywords}')
     print(f' LLM:    {config["llm"].get("provider", "?")} / {config["llm"].get("model", "?")}')
     print(f' 控制:   UDP → {arbiter_ip}:{arbiter_port} (仲裁器)')
@@ -537,10 +548,17 @@ def main():
     else:
         print('[VISION] 未启用 (config vision.enabled=false)')
 
+    # TTS 播报封装: 播报后加静默窗, 防喇叭余音触发 VAD 误唤醒
+    def say(text: str):
+        if not tts:
+            return
+        tts.speak(text, speaker, volume)
+        if tts_settle_ms > 0:
+            time.sleep(tts_settle_ms / 1000.0)
+
     # 开场白
     if tts:
-        tts.speak('你好，我是小狗。请说小狗唤醒我，然后就可以和我聊天了。',
-                  speaker, volume)
+        say('你好，我是小狗。请说小狗唤醒我，然后就可以和我聊天了。')
 
     wakeup_mode = wakeup_enabled
 
@@ -558,7 +576,8 @@ def main():
                        use_vad=use_vad,
                        vad_aggressiveness=vad_aggr,
                        silence_dur=silence,
-                       gain_db=gain)
+                       gain_db=gain,
+                       min_speech_frames=min_speech)
             text = wav_to_text(asr_model, wav_path)
             os.remove(wav_path)
 
@@ -571,8 +590,7 @@ def main():
             if wakeup_mode:
                 if any(kw in text for kw in wakeup_keywords):
                     print('  → 唤醒成功！')
-                    if tts:
-                        tts.speak('我在，请说。', speaker, volume)
+                    say('我在，请说。')
                     wakeup_mode = False
                     continue
                 else:
@@ -595,39 +613,40 @@ def main():
                 if len(fast_seq) == 1 and fast_seq[0] not in CONTINUOUS_ACTIONS:
                     execute_action_sequence(actions, arbiter_ip, arbiter_port,
                                             move_sec, discrete_sec)
-                    if tts:
-                        tts.speak(reply_text, speaker, volume)
+                    say(reply_text)
                 else:
-                    if tts:
-                        tts.speak(reply_text, speaker, volume)
+                    say(reply_text)
                     execute_action_sequence(actions, arbiter_ip, arbiter_port,
                                             move_sec, discrete_sec)
                 continue
 
             # ===== 视觉问答（USB摄像头取帧 + VLM 描述，绕过 LLM） =====
-            if vision and is_vision_query(text):
-                print('  → 视觉问答')
-                if tts:
-                    tts.speak('好的，我看一下。', speaker, volume)
+            vision_hit = match_vision_query(text) if vision else ''
+            if vision and vision_hit:
+                print(f'  → 视觉问答 (命中: {vision_hit})')
+                say('好的，我看一下。')
                 try:
+                    _t0 = time.time()
                     answer = vision.look(text)
+                    print(f"  [VISION] query='{text}' hit={vision_hit} "
+                          f'latency={time.time() - _t0:.1f}s')
                     print(f'  VLM回答: {answer}')
-                    if tts:
-                        tts.speak(answer, speaker, volume)
+                    say(answer)
                 except Exception as e:
                     print(f'  [VISION] 错误: {e}')
-                    if tts:
-                        tts.speak('抱歉，我现在看不清，请稍后再试。', speaker, volume)
+                    say('抱歉，我现在看不清，请稍后再试。')
                 continue
 
             # ===== LLM 对话 + 意图识别 =====
+            if '看' in text:
+                # 含"看"但未命中视觉词表 → 打日志, 赛后按日志补词表
+                print(f"  [VISION] 疑似视觉问句未命中词表, 走 LLM: '{text}'")
             print('  → 调用 LLM...')
             try:
                 reply, actions = llm.chat(text)
             except Exception as e:
                 print(f'  [LLM] 错误: {e}')
-                if tts:
-                    tts.speak('抱歉，我好像走神了，请再说一遍。', speaker, volume)
+                say('抱歉，我好像走神了，请再说一遍。')
                 continue
 
             print(f'  LLM回复: {reply}')
@@ -635,8 +654,7 @@ def main():
                 print(f'  LLM动作序列: {actions}')
 
             # TTS 播报
-            if tts:
-                tts.speak(reply, speaker, volume)
+            say(reply)
 
             # 按顺序执行动作序列（每个动作时长由 LLM 指定, 缺省用默认值）
             if actions:

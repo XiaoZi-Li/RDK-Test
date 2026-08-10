@@ -14,7 +14,9 @@
 import base64
 import json
 import os
+import re
 import sys
+import time
 import urllib.request
 import urllib.error
 
@@ -31,13 +33,38 @@ VISION_PHRASES = [
     '拍张照', '拍个照', '拍一张照片',
     '你眼前', '视野里', '你看到了', '你看到什么',
     '描述一下你看到', '描述你看到', '你在看',
+    # ---- 2026-08-10 扩充: 覆盖自然说法 ----
+    '你看到了吗', '你能看见', '你看得见', '看得见吗',
+    '你眼里', '眼中的', '眼里有什么',
+    '识别一下', '识别下', '辨认一下', '辨认下',
+    '你面前的', '镜头里', '画面里', '摄像头里',
+    '看到了吗', '看见了吗', '看得到吗',
+    '看一下我', '看看我', '看我一眼',
 ]
+
+# 正则兜底: 疑问式视觉问句, 如 "你现在能看到我吗" "前面看得见东西吗"
+_VISION_REGEX = re.compile(r'(看|瞧|瞅).{0,8}(吗|么|啥|什么|东西|人|到)[？?]?$')
+
+# 误伤保护: 含运动词的句子优先当运动指令, 不判视觉 (如 "看着我向左转")
+_MOTION_WORDS = ('走', '转', '坐', '趴', '停', '站', '前进', '后退',
+                 '过来', '过去', '别动', '动一下')
+
+
+def match_vision_query(text: str) -> str:
+    """判断是否为视觉类问句, 返回命中的触发词/规则名, 未命中返回空串"""
+    t = text.strip()
+    for p in VISION_PHRASES:
+        if p in t:
+            return p
+    # 正则兜底 (带运动词误伤保护)
+    if _VISION_REGEX.search(t) and not any(m in t for m in _MOTION_WORDS):
+        return 'regex:疑问式看'
+    return ''
 
 
 def is_vision_query(text: str) -> bool:
     """判断是否为视觉类问句"""
-    text = text.strip()
-    return any(p in text for p in VISION_PHRASES)
+    return bool(match_vision_query(text))
 
 
 class VisionClient:
@@ -110,9 +137,12 @@ class VisionClient:
 
     def look(self, question: str) -> str:
         """取帧 + 提问，一步完成"""
+        t0 = time.time()
         jpeg = self.fetch_frame()
         print(f"[VISION] 取帧成功 ({len(jpeg)} 字节), 调用 VLM...")
-        return self.describe(question, jpeg)
+        answer = self.describe(question, jpeg)
+        print(f"[VISION] VLM 回答完成, 总耗时 {time.time() - t0:.1f}s")
+        return answer
 
 
 # ============ 独立测试 ============
@@ -125,8 +155,10 @@ def main():
     client = VisionClient(config)
 
     print("=== 视觉问句识别测试 ===")
-    for t in ["你现在能看到什么", "坐下", "看看周围有什么", "往前走", "拍张照片看看"]:
-        print(f"  '{t}' → {is_vision_query(t)}")
+    for t in ["你现在能看到什么", "坐下", "看看周围有什么", "往前走", "拍张照片看看",
+              "你看到了吗", "你能看见我吗", "看得见东西吗", "看着我向左转",
+              "镜头里有什么", "你眼里有什么"]:
+        print(f"  '{t}' → {match_vision_query(t) or '(未命中)'}")
 
     print(f"\n=== VLM 问答测试: {question} ===")
     import time

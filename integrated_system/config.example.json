@@ -10,8 +10,10 @@
   "voice": {
     "mic": "plughw:1,0",
     "speaker": "plughw:0,0",
-    "gain_db": 10,
-    "vad_aggressiveness": 2,
+    "gain_db": 6,
+    "vad_aggressiveness": 3,
+    "min_speech_frames": 10,
+    "tts_settle_ms": 400,
     "silence_duration": 1.0,
     "wakeup_enabled": true,
     "wakeup_keywords": ["小狗"],

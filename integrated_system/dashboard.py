@@ -165,8 +165,18 @@ _llm = None
 _llm_init_lock = threading.Lock()
 _llm_call_lock = threading.Lock()    # LlmDialogue.chat 非线程安全(历史记录), 串行调用
 _action_lock = threading.Lock()      # 动作序列串行执行, 前一组没做完就排队等
+_vision = None                       # VisionClient 懒加载 (视觉问答)
+_vision_init_lock = threading.Lock()
 _motion_cfg = {"arbiter_ip": "127.0.0.1", "arbiter_port": 5005,
                "move_duration_sec": 2.5, "discrete_wait_sec": 2.0}
+
+
+def _load_config() -> dict:
+    if DASHBOARD_DIR not in sys.path:
+        sys.path.insert(0, DASHBOARD_DIR)
+    cfg_path = os.path.join(DASHBOARD_DIR, "config.json")
+    with open(cfg_path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 def get_llm():
@@ -174,15 +184,24 @@ def get_llm():
     global _llm
     with _llm_init_lock:
         if _llm is None:
-            if DASHBOARD_DIR not in sys.path:
-                sys.path.insert(0, DASHBOARD_DIR)
-            cfg_path = os.path.join(DASHBOARD_DIR, "config.json")
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
+            config = _load_config()
             _motion_cfg.update(config.get("motion", {}))
             from llm_dialogue import LlmDialogue
             _llm = LlmDialogue(config)
     return _llm
+
+
+def get_vision():
+    """延迟初始化视觉问答客户端 (与语音助手共用 8094/snapshot 取帧)"""
+    global _vision
+    with _vision_init_lock:
+        if _vision is None:
+            config = _load_config()
+            if not config.get("vision", {}).get("enabled", False):
+                raise RuntimeError("config vision.enabled=false")
+            from vision_assistant import VisionClient
+            _vision = VisionClient(config)
+    return _vision
 
 
 def run_actions_bg(actions: list):
@@ -423,7 +442,7 @@ body {
       <input id="chat-text" type="text" placeholder="输入指令或聊天内容，回车发送..." autocomplete="off">
       <button class="btn blue" id="chat-send" onclick="sendChat()">发送</button>
     </div>
-    <div class="chat-hint">与语音助手共用同一个 DeepSeek 模型和动作执行通道（source=voice），支持多动作序列和时长控制</div>
+    <div class="chat-hint">与语音助手共用同一个 DeepSeek 模型和动作执行通道（source=voice），支持多动作序列和时长控制；问「你能看到什么」类问题会调用实时摄像头画面（📷 标记）</div>
   </div>
 
   <!-- 视频流 -->
@@ -580,7 +599,7 @@ async function sendChat() {
     });
     const data = await resp.json();
     if (data.ok) {
-      thinking.textContent = data.reply || '(无回复)';
+      thinking.textContent = (data.vision ? '📷 ' : '') + (data.reply || '(无回复)');
       if (data.actions && data.actions.length) {
         const tag = document.createElement('span');
         tag.className = 'actions-tag';
@@ -767,6 +786,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             if not text:
                 self.send_json({"ok": False, "error": "text 为空"}, 400)
+                return
+            # 视觉问句 → 视觉模块 (取 8094/snapshot 实时帧 + VLM), 不走 LLM
+            from vision_assistant import match_vision_query
+            vision_hit = match_vision_query(text)
+            if vision_hit:
+                print(f"[CHAT] 视觉问句 (命中: {vision_hit}): '{text}'", flush=True)
+                try:
+                    vision = get_vision()
+                except Exception as e:
+                    self.send_json({"ok": True, "vision": True, "actions": [],
+                                    "reply": f"视觉模块不可用: {e}"})
+                    return
+                try:
+                    t0 = time.time()
+                    reply = vision.look(text)
+                    print(f"[CHAT] VISION query='{text}' hit={vision_hit} "
+                          f"latency={time.time()-t0:.1f}s", flush=True)
+                    self.send_json({"ok": True, "reply": reply,
+                                    "vision": True, "actions": []})
+                except Exception as e:
+                    print(f"[CHAT] VISION 错误: {e}", flush=True)
+                    self.send_json({"ok": True, "vision": True, "actions": [],
+                                    "reply": f"我现在看不清 ({e})"})
                 return
             try:
                 llm = get_llm()

@@ -184,11 +184,17 @@ class ActionScheduler:
     def __init__(self, udp: SitUdpClient,
                  gesture_hold_sec: float = 0.5,
                  action_lock_sec: float = 2.5,
-                 log_interval: float = 0.5):
+                 log_interval: float = 0.5,
+                 confirm_frames: int = 6):
         self.udp = udp
         self.gesture_hold_sec = gesture_hold_sec
         self.action_lock_sec = action_lock_sec
         self.log_interval = log_interval
+        # 连续帧确认: 同一动作需连续出现 N 帧才触发 (防手一挥过误触发)
+        # 停车不延迟: 无手势仍立即 stop, 安全响应不变慢
+        self.confirm_frames = max(1, int(confirm_frames))
+        self._candidate_action: Optional[str] = None
+        self._candidate_count = 0
 
         self._lock = threading.Lock()
         self.last_gesture_time = 0.0
@@ -198,10 +204,15 @@ class ActionScheduler:
         self.last_log_time = 0.0
         self.last_send_time = 0.0
 
+    def _reset_candidate(self):
+        self._candidate_action = None
+        self._candidate_count = 0
+
     def update(self, gestures: List[str], now: float):
         """gestures: 当前帧检测到的所有手势名称列表"""
-        # 没有检测到手势时立即停车 (用户明确要求)
+        # 没有检测到手势时立即停车 (用户明确要求, 安全响应不加确认延迟)
         if not gestures:
+            self._reset_candidate()
             self._send_stop(now)
             return
 
@@ -246,11 +257,21 @@ class ActionScheduler:
                         gesture_name = 'palm'
                         break
 
-        # 4. 执行
+        # 4. 连续帧确认
         if action is None:
-            # 无有效手势, 不立即停, 由 _check_timeout 处理
+            # 手势无法归类 (unknown), 不累计确认, 停车由 check_timeout 兜底
+            self._reset_candidate()
+            return
+        if action != self._candidate_action:
+            # 新手势第一帧: 只记录不触发
+            self._candidate_action = action
+            self._candidate_count = 1
+            return
+        self._candidate_count += 1
+        if self._candidate_count < self.confirm_frames:
             return
 
+        # 5. 确认通过, 执行
         # 离散动作: 触发一次 + 加锁
         if action in DISCRETE_ACTIONS:
             self._send_discrete(action, gesture_name, now)
@@ -465,6 +486,8 @@ def main():
                         help='手势消失多少秒后停车')
     parser.add_argument('--lock-sec', type=float, default=2.5,
                         help='离散动作(sit/crouch)防重复锁时长')
+    parser.add_argument('--confirm-frames', type=int, default=6,
+                        help='同一手势连续出现多少帧才触发动作 (防抖, 0/1=关闭确认)')
     args = parser.parse_args()
 
     # 1. 打开摄像头
@@ -497,8 +520,10 @@ def main():
     udp = SitUdpClient(args.udp_ip, args.udp_port)
     scheduler = ActionScheduler(udp,
                                 gesture_hold_sec=args.hold_sec,
-                                action_lock_sec=args.lock_sec)
+                                action_lock_sec=args.lock_sec,
+                                confirm_frames=args.confirm_frames)
     print(f"[udp] 目标 {args.udp_ip}:{args.udp_port}")
+    print(f"[main] 手势确认帧数: {scheduler.confirm_frames} (挥过不触发, 需稳定保持)")
     print("[main] 手势映射:")
     print("  手掌张开 → walk(前进)")
     print("  握拳    → crouch(趴下)")
