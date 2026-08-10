@@ -74,6 +74,14 @@ TURN_TIMEOUT = 4.0       # 转向兜底超时 (防死循环)
 VIS_DANGER = 18.0
 VISUAL_SCALE = 30.0
 
+# ============ v5 方位判定参数 (2026-08-11 六组标定数据拟合) ============
+# 有障碍 = 近端距离 < BLOCKED_DIST 且 近像素占比 > OBST_RATIO (双条件)
+#   —— 抗"障碍移开后近像素滞留": 滞留是高占比+远距离, 距离条件直接滤掉
+BLOCKED_DIST = 0.35      # 近端分位距离 < 0.35m → 该区域有障碍
+SIDE_RATIO = 0.90        # 用户现场规则: 左/右占比 ≥90% → 该侧有障
+TIE_MARGIN = 0.08        # 兜底判定: center 距离与最小值差 < 0.08m → 优先算 center
+                         # (center 近像素系统性偏低 — 正前水瓶双目匹配弱, 用距离补偿)
+
 # ============ 心跳: arbiter P0 通道 0.3s 超时, 0.2s 重发保持活跃 ============
 CMD_HEARTBEAT_SEC = 0.2
 
@@ -110,6 +118,10 @@ class StereoAvoidanceNode(Node):
         self.declare_parameter('control_udp_port', 5008)
         self.declare_parameter('usb_fusion_port', 5009)   # USB 语义检测 UDP (0=禁用)
         self.declare_parameter('usb_fusion', True)
+        # v5 方位判定参数
+        self.declare_parameter('blocked_dist', BLOCKED_DIST)
+        self.declare_parameter('side_ratio', SIDE_RATIO)
+        self.declare_parameter('tie_margin', TIE_MARGIN)
 
         self.udp_ip = str(self.get_parameter('udp_ip').value)
         self.udp_port = int(self.get_parameter('udp_port').value)
@@ -126,6 +138,9 @@ class StereoAvoidanceNode(Node):
         self.speak_addr = (str(self.get_parameter('speak_udp_ip').value),
                            int(self.get_parameter('speak_udp_port').value))
         self.control_port = int(self.get_parameter('control_udp_port').value)
+        self.blocked_dist = float(self.get_parameter('blocked_dist').value)
+        self.side_ratio = float(self.get_parameter('side_ratio').value)
+        self.tie_margin = float(self.get_parameter('tie_margin').value)
         hz = float(self.get_parameter('decision_hz').value)
 
         # ==================== USB 语义检测融合 ====================
@@ -319,10 +334,12 @@ class StereoAvoidanceNode(Node):
             left_d, left_r = region_stat(band[:, :x_l])      # 图像左 = 机器人左
             center_d, center_r = region_stat(band[:, x_l:x_r])
             right_d, right_r = region_stat(band[:, x_r:])    # 图像右 = 机器人右
-            # 全帧饱和守卫: 三区占比都极高且距离全部钉在下限 → stereonet 垃圾输出
-            # 或镜头被完全遮挡。此时任何避障动作都无意义 (后退数据也不会变)
+            # 全帧饱和守卫: 三区占比都极高且距离全部钉在贴脸级 (<0.10m)
+            #   → stereonet 垃圾输出或镜头被完全捂住, 任何避障动作都无意义
+            # 注意阈值必须贴脸级: 真实障碍场景 (六组标定) 也会出现三区占比>50%
+            #   且 max_d<0.25, 0.25 的阈值会把真障碍误判成垃圾数据
             saturated = (left_r > 0.5 and center_r > 0.5 and right_r > 0.5
-                         and max(left_d, center_d, right_d) < 0.25)
+                         and max(left_d, center_d, right_d) < 0.10)
         else:
             # visual 近度 (大=近): 近度 > VIS_DANGER 的像素占比
             def region_stat_vis(region):
@@ -401,7 +418,8 @@ class StereoAvoidanceNode(Node):
             # 运行时调参 (现场摆瓶标定时实时调阈值)
             for key in ('danger_dist', 'obst_ratio', 'clear_ratio',
                         'band_top', 'band_bot', 'stop_sec', 'back_sec',
-                        'turn_timeout'):
+                        'turn_timeout', 'blocked_dist', 'side_ratio',
+                        'tie_margin'):
                 if key in payload:
                     try:
                         setattr(self, key, float(payload[key]))
@@ -543,33 +561,60 @@ class StereoAvoidanceNode(Node):
         self.avoid_state = state
         self.avoid_state_start = time.time()
 
-    def _obstacle_side(self, res):
-        """占比判定障碍方位: 'left'/'center'/'right'/None
+    def _region_blocked(self, res, side):
+        """单区有障判定 (v5 双条件): 近端距离够近 且 近像素占比够高
+        抗"障碍移开后近像素滞留": 滞留=高占比+远距离, 距离条件直接滤掉"""
+        return (res[side + '_d'] < self.blocked_dist
+                and res[side + '_r'] > self.obst_ratio)
 
-        规则 (用户现场标定):
-          - 三区近像素占比都低于阈值 → None (畅通)
-          - center 触发且占比三区最大 → 'center' (正前障碍, 停+退+绕)
-          - 否则占比高的一侧 → 'left'/'right' (侧向躲避)
+    def _obstacle_side(self, res):
+        """v5 方位判定: 'left'/'center'/'right'/None (六组标定数据拟合)
+
+        规则 (用户现场标定 2026-08-11):
+          1. 三区都不满足双条件 → None (畅通)
+          2. 左/右占比 ≥90% (且满足双条件):
+             - 仅一侧 → 该侧有障 (向反方向转)
+             - 两侧都 ≥90% → 'center' (按正前障碍处理, 优先右转)
+          3. 兜底: 近端分位距离最小侧; center 与最小值差 < tie_margin 时
+             优先 'center' (center 近像素系统性偏低, 正前水瓶双目匹配弱,
+             用距离补偿 — 标定组"正前2" center 仅33.9% 但距离 0.12m 最小)
         """
-        l_r, c_r, r_r = res['left_r'], res['center_r'], res['right_r']
-        l_blk = l_r > self.obst_ratio
-        c_blk = c_r > self.obst_ratio
-        r_blk = r_r > self.obst_ratio
+        l_d, c_d, r_d = res['left_d'], res['center_d'], res['right_d']
+        l_r, r_r = res['left_r'], res['right_r']
+        l_blk = self._region_blocked(res, 'left')
+        c_blk = self._region_blocked(res, 'center')
+        r_blk = self._region_blocked(res, 'right')
         if not (l_blk or c_blk or r_blk):
             return None
-        # 正前: center 触发且为主导区域
-        if c_blk and c_r >= l_r and c_r >= r_r:
+        # 90% 规则 (center 也≥90% 时说明障碍横跨中间 → 按正前处理)
+        l90 = l_blk and l_r >= self.side_ratio
+        c90 = c_blk and res['center_r'] >= self.side_ratio
+        r90 = r_blk and r_r >= self.side_ratio
+        if (l90 and r90) or (c90 and (l90 or r90)):
             return 'center'
-        # 侧向: 占比高的一侧
-        if l_blk or r_blk:
-            return 'left' if l_r >= r_r else 'right'
-        # 只有 center 触发 (非主导也会到这里: l/r 未触发)
-        return 'center'
+        if l90:
+            return 'left'
+        if r90:
+            return 'right'
+        if c90:
+            return 'center'
+        # 兜底: 距离最小侧, 并列含 center → center
+        m = min(l_d, c_d, r_d)
+        if c_blk and c_d <= m + self.tie_margin:
+            return 'center'
+        if not l_blk and not r_blk:
+            return 'center'      # 只有 center 触发
+        if l_blk and not r_blk:
+            return 'left'
+        if r_blk and not l_blk:
+            return 'right'
+        return 'left' if l_d <= r_d else 'right'
 
     def _side_cleared(self, res, watch_sides):
-        """转向清空判定: 关注侧占比都降到 clear_ratio 以下"""
+        """转向清空判定 (v5): 关注侧都不满足有障双条件 → 已清空
+        (旧版只看占比 <clear_ratio, 移开后滞留高占比会永远不清空 → 死转)"""
         for s in watch_sides:
-            if res[s + '_r'] > self.clear_ratio:
+            if self._region_blocked(res, s):
                 return False
         return True
 
@@ -665,12 +710,15 @@ class StereoAvoidanceNode(Node):
                 self._set_state('BACK')
             return
 
-        # ---------- BACK: 后退 → 向空旷侧转 ----------
+        # ---------- BACK: 后退 → 转向绕行 (v5: 优先右转) ----------
         if self.avoid_state == 'BACK':
             self._send_cmd('backward')
             if elapsed > self.back_sec:
-                # 转空旷侧: 左侧占比低 → 左转; 否则右转
-                if res['left_r'] <= res['right_r']:
+                # 用户规则: 正前/双侧障碍优先右转;
+                # 仅当右侧仍有障且左侧畅通时才左转
+                r_blk = self._region_blocked(res, 'right')
+                l_blk = self._region_blocked(res, 'left')
+                if r_blk and not l_blk:
                     self._send_cmd('turn_left')
                     self._set_state('TURN_LEFT')
                 else:

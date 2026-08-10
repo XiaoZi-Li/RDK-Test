@@ -160,34 +160,74 @@ class OfflineAnalyzer(Node):
             return list(self._frames)
 
 
-def decide(left_r, center_r, right_r, obst_ratio):
-    """与在线避障 v4 _obstacle_side 完全相同的占比判定"""
-    l_blk = left_r > obst_ratio
-    c_blk = center_r > obst_ratio
-    r_blk = right_r > obst_ratio
+# ============ v5 判定参数 (与 stereo_avoidance_node.py 完全一致) ============
+BLOCKED_DIST = 0.35    # 近端分位距离 < 0.35m 且占比>obst_ratio → 该区有障
+SIDE_RATIO = 0.90      # 左/右占比 ≥90% → 该侧有障; 两侧都≥90% → 正前(优先右转)
+TIE_MARGIN = 0.08      # 兜底: center 距离与最小值差 < 0.08m → 优先 center
+
+
+def obstacle_side(left_d, center_d, right_d,
+                  left_r, center_r, right_r,
+                  obst_ratio, blocked=BLOCKED_DIST,
+                  side_ratio=SIDE_RATIO, tie=TIE_MARGIN):
+    """与在线避障 v5 _obstacle_side 完全相同的判定, 返回 None/'left'/'center'/'right'"""
+    l_blk = left_d < blocked and left_r > obst_ratio
+    c_blk = center_d < blocked and center_r > obst_ratio
+    r_blk = right_d < blocked and right_r > obst_ratio
     if not (l_blk or c_blk or r_blk):
-        return '畅通(可直行)'
-    if c_blk and center_r >= left_r and center_r >= right_r:
-        return '正前方障碍(停+退+绕)'
-    if l_blk or r_blk:
-        return '左前方障碍(右转)' if left_r >= right_r else '右前方障碍(左转)'
-    return '正前方障碍(停+退+绕)'
+        return None
+    l90 = l_blk and left_r >= side_ratio
+    c90 = c_blk and center_r >= side_ratio
+    r90 = r_blk and right_r >= side_ratio
+    if (l90 and r90) or (c90 and (l90 or r90)):
+        return 'center'
+    if l90:
+        return 'left'
+    if r90:
+        return 'right'
+    if c90:
+        return 'center'
+    m = min(left_d, center_d, right_d)
+    if c_blk and center_d <= m + tie:
+        return 'center'
+    if not l_blk and not r_blk:
+        return 'center'
+    if l_blk and not r_blk:
+        return 'left'
+    if r_blk and not l_blk:
+        return 'right'
+    return 'left' if left_d <= right_d else 'right'
 
 
-def match_label(label: str, left_r, center_r, right_r, obst_ratio) -> bool:
-    """标定期望值 vs 实测判定 (v4 占比, 主导区域规则)
-    正前方有障碍物: center 触发且占比最大
-    左转(障碍在右): right 触发且 right >= left
-    右转(障碍在左): left 触发且 left > right"""
-    l_blk = left_r > obst_ratio
-    c_blk = center_r > obst_ratio
-    r_blk = right_r > obst_ratio
+_SIDE_TEXT = {None: '畅通(可直行)', 'left': '左前方障碍(右转)',
+              'right': '右前方障碍(左转)', 'center': '正前方障碍(停+退+优先右转)'}
+
+
+def decide(left_d, center_d, right_d, left_r, center_r, right_r, obst_ratio):
+    """v5: 返回人类可读判定文本"""
+    side = obstacle_side(left_d, center_d, right_d, left_r, center_r, right_r,
+                         obst_ratio)
+    return _SIDE_TEXT[side]
+
+
+def match_label(label: str, left_d, center_d, right_d,
+                left_r, center_r, right_r, obst_ratio) -> bool:
+    """标定期望值 vs 实测判定 (v5)
+
+    "能避开即正确"标准:
+      正前方有障碍物 → side == 'center'
+      左转(障碍在右) → side == 'right'
+      右转(障碍在左) → side == 'left'
+      双侧≥90%判 center 时, 左转/右转标定也算动作可避开(优先右转能绕开) → 通过
+    """
+    side = obstacle_side(left_d, center_d, right_d, left_r, center_r, right_r,
+                         obst_ratio)
     if label in ('正前方有障碍物', '直行'):   # 兼容旧标定
-        return c_blk and center_r >= left_r and center_r >= right_r
+        return side == 'center'
     if label == '左转':
-        return r_blk and right_r >= left_r
+        return side in ('right', 'center')
     if label == '右转':
-        return l_blk and left_r > right_r
+        return side in ('left', 'center')
     return False
 
 
@@ -252,8 +292,10 @@ def main():
         right_r = float(np.median([v[5] for v in lcr]))
 
         label = labels.get(ts, '(未标定)')
-        verdict = decide(left_r, center_r, right_r, args.obst_ratio)
-        ok = match_label(label, left_r, center_r, right_r, args.obst_ratio) \
+        verdict = decide(left_d, center_d, right_d,
+                         left_r, center_r, right_r, args.obst_ratio)
+        ok = match_label(label, left_d, center_d, right_d,
+                         left_r, center_r, right_r, args.obst_ratio) \
             if label in ('左转', '右转', '正前方有障碍物', '直行') else None
         if ok is True:
             passed += 1
